@@ -69,8 +69,15 @@ src/probe.py          # CLI
 
 ---
 
+## 7. 方法论
+
+完整定位见 [`METHODOLOGY_v1_zh.md`](./METHODOLOGY_v1_zh.md)：Probe = Harness **编译链 reference implementation**，未来并入 Agent Harness SDK。
+
+---
+
 ## 修订记录
 
 | 日期 | 说明 |
 | --- | --- |
 | 2026-06-27 | v1 初版 |
+| 2026-06-27 | 链至 METHODOLOGY_v1_zh |

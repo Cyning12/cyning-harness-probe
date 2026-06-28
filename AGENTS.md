@@ -5,8 +5,9 @@ Open Folder = **`harness-probe/`**（本目录）。
 ## 读序
 
 1. [`README.md`](README.md)
-2. [`docs/QA_AND_FRAMEWORK_v1_zh.md`](docs/QA_AND_FRAMEWORK_v1_zh.md)
-3. [`docs/ARCHITECTURE_v1_zh.md`](docs/ARCHITECTURE_v1_zh.md)
+2. [`docs/METHODOLOGY_v1_zh.md`](docs/METHODOLOGY_v1_zh.md)
+3. [`docs/QA_AND_FRAMEWORK_v1_zh.md`](docs/QA_AND_FRAMEWORK_v1_zh.md)
+4. [`docs/ARCHITECTURE_v1_zh.md`](docs/ARCHITECTURE_v1_zh.md)
 
 ## 命令
 

@@ -40,9 +40,14 @@ python -m src.probe compile \
 
 ## 文档
 
+- [方法论定位（推荐阅读）](docs/METHODOLOGY_v1_zh.md)
 - [框架 Q&A 落盘](docs/QA_AND_FRAMEWORK_v1_zh.md)
 - [架构 v1](docs/ARCHITECTURE_v1_zh.md)
 - 工作区对照（Ink monorepo）：`docs/harness/guides/COMPARISON_tech_graph_coding_wiki_graph_memory_v1_zh.md` §2.2
+
+## 在方法论中的位置
+
+Probe 是 **完整 Harness 的编译链子集**（非 Agent 产品、非 Runtime）。未来可并入 Agent 产品的 **Harness SDK**（`compile_context` + contract + L1.5）。详见 [`docs/METHODOLOGY_v1_zh.md`](docs/METHODOLOGY_v1_zh.md)。
 
 ## 设计哲学
 
