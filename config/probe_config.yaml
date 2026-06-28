@@ -1,0 +1,11 @@
+# Harness Probe 配置（v0.1）
+probe:
+  default_graph: data/graph/sample_graph_v2.json
+  default_wiki: data/wiki/syntheses_stub.json
+  default_depth: 2
+  contract_max_rows: 15
+  dry_run: true
+
+paths:
+  # 可选：指向 Ink 后端全量 graph.json（相对 repo 根）
+  ink_api_graph: ../ai-ink-brain-api-python/docs/_tech_graph/graph.json

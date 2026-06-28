@@ -1,0 +1,23 @@
+[
+  {
+    "id": "wiki-rag-fallback-001",
+    "title": "RAG hits=0 走 fallback 而非空返回",
+    "summary": "历史任务：hits=0 时走 OUT_NO_DATA→CTX，避免 Subagent 误以为应直接 return 200 空 body。",
+    "graph_nodes": ["HIT0", "OUT_NO_DATA"],
+    "freeze_id": "HARNESS-PROBE-SAMPLE-V0.1"
+  },
+  {
+    "id": "wiki-rpc-retry-002",
+    "title": "FTS RPC 重试看 env 而非图谱 guardrails",
+    "summary": "重试次数来自 RAG_RPC_RETRIES / rpc_execute_with_retry，Inform 边标 [retry=N]。",
+    "graph_nodes": ["FTS", "RPC"],
+    "freeze_id": "HARNESS-PROBE-SAMPLE-V0.1"
+  },
+  {
+    "id": "wiki-contract-003",
+    "title": "Subagent 只收 AcceptanceContract 表",
+    "summary": "failure_paths 全文不进 prompt；Lead 收工对照 failure_path_ref。",
+    "graph_nodes": [],
+    "freeze_id": "HARNESS-PROBE-SAMPLE-V0.1"
+  }
+]

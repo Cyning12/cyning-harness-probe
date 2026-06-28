@@ -1,0 +1,29 @@
+{
+  "schema_version": "graph_v2",
+  "freeze_id": "HARNESS-PROBE-SAMPLE-V0.1",
+  "generated_at": "2026-06-27T00:00:00Z",
+  "nodes": [
+    {"id": "RAG", "label": "RAG 子流程", "graph_id": "00_main", "kind": "struct"},
+    {"id": "RAG_DOC", "label": ">10_flow_rag.md", "graph_id": "00_main"},
+    {"id": "FTS", "label": "FTS 召回", "graph_id": "00_main"},
+    {"id": "RPC", "label": "Supabase RPC", "graph_id": "00_main"},
+    {"id": "U1", "label": "Unified JSON", "graph_id": "00_main"},
+    {"id": "FUSE", "label": "fuse_hits_rrf()", "graph_id": "10_flow_rag"},
+    {"id": "HIT0", "label": "hits == 0 ?", "graph_id": "10_flow_rag"},
+    {"id": "OUT_NO_DATA", "label": "no_data / 不确定回答", "graph_id": "10_flow_rag"},
+    {"id": "CTX", "label": "Context Build", "graph_id": "10_flow_rag"},
+    {"id": "LLM", "label": "async def llm_answer", "graph_id": "10_flow_rag"}
+  ],
+  "edges": [
+    {"from": "RAG", "to": "FTS", "mark": "->", "type": "depends_on", "sync": true, "graph_id": "00_main", "anchors": []},
+    {"from": "RAG", "to": "RAG_DOC", "mark": "->", "type": "depends_on", "sync": true, "graph_id": "00_main", "label": "加载", "anchors": []},
+    {"from": "FTS", "to": "RPC", "mark": "->", "type": "depends_on", "sync": true, "graph_id": "00_main", "anchors": []},
+    {"from": "U1", "to": "RAG", "mark": "->", "type": "depends_on", "sync": true, "graph_id": "00_main", "anchors": []},
+    {"from": "FUSE", "to": "HIT0", "mark": "?>", "type": "condition", "sync": true, "graph_id": "10_flow_rag", "anchors": []},
+    {"from": "HIT0", "to": "OUT_NO_DATA", "mark": "[yes]", "type": "condition", "sync": true, "graph_id": "10_flow_rag", "anchors": [{"path": "api/unified_chat.py", "symbol": "build_context"}]},
+    {"from": "HIT0", "to": "CTX", "mark": "[no]", "type": "condition", "sync": true, "graph_id": "10_flow_rag", "anchors": []},
+    {"from": "OUT_NO_DATA", "to": "CTX", "mark": "[fallback]", "type": "condition", "sync": true, "graph_id": "10_flow_rag", "anchors": []},
+    {"from": "CTX", "to": "LLM", "mark": "->", "type": "depends_on", "sync": true, "graph_id": "10_flow_rag", "anchors": []},
+    {"from": "FTS", "to": "FTS", "mark": "[retry=N]", "type": "depends_on", "sync": true, "graph_id": "10_flow_rag", "anchors": [{"path": "api/rag_recall_tools.py", "symbol": "rpc_execute_with_retry"}]}
+  ]
+}
