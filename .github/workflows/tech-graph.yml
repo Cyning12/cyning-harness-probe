@@ -1,0 +1,85 @@
+name: tech-graph
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  task_validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pydantic pyyaml
+
+      - name: Detect task file changes
+        id: tasks
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.base_ref }}"
+            git fetch origin "$BASE" --depth=1 2>/dev/null || true
+            CHANGED="$(git diff --name-only "origin/${BASE}...HEAD" -- 'docs/harness/tasks/' || true)"
+          else
+            CHANGED="$(git diff --name-only HEAD~1 HEAD -- 'docs/harness/tasks/' || true)"
+          fi
+          if [ -n "$CHANGED" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Task paths changed:"
+            echo "$CHANGED"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No docs/harness/tasks/ changes; skipping task_validate."
+          fi
+
+      - name: Harness task validate (changed task files)
+        if: steps.tasks.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.base_ref }}"
+            FILES="$(git diff --name-only --diff-filter=ACMR "origin/${BASE}...HEAD" -- 'docs/harness/tasks/active/*.md' 'docs/harness/tasks/done/*.md' || true)"
+          else
+            FILES="$(git diff --name-only --diff-filter=ACMR HEAD~1 HEAD -- 'docs/harness/tasks/active/*.md' 'docs/harness/tasks/done/*.md' || true)"
+          fi
+          if [ -z "$FILES" ]; then
+            echo "No task .md to validate."
+            exit 0
+          fi
+          for f in $FILES; do
+            if [ ! -f "$f" ]; then
+              echo "Skip missing path: $f"
+              continue
+            fi
+            echo "Validating $f"
+            python tools/harness_task_validate.py "$f"
+          done
+
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pydantic pyyaml
+
+      - name: Run tests
+        run: pytest tests/ -q
