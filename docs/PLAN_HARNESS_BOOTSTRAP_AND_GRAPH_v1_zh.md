@@ -66,38 +66,37 @@ harness-probe/
 
 ### Step A：cyning-harness 引导（1 次操作）
 
-**结论：`npx @cyning/harness init` 可直接用，但需要手动补 AGENTS.md + 图谱。**
+**结论：`npx @cyning/harness init --preset harness-only` 打底，AGENTS/CLAUDE 片段从 `ide/adapters/` 取。**
 
 `@cyning/harness@2.0.4` 的 `harness-only` profile 提供：
 
-| 轨道 | 是否启用 | 说明 |
-| --- | --- | --- |
-| `harness_prompts` | ✅ | 复制 10/22/30/40 prompts + invoke 模板到 `docs/harness/prompts/` |
+| 轨道 | 启用 | 说明 |
+| --- |:---:| --- |
+| `harness_prompts` | ✅ | 复制 10/22/30/40 prompts + TEMPLATE 到 `docs/harness/prompts/` |
+| `harness_invoke_template` | ✅ | invoke 快照模板 |
 | `ide_cursor` | ✅ | 复制 `.cursor/rules/06-harness-pointer.mdc` |
-| `ide_agents` | ❌ | `harness-only` 未启用，需手动创建 `.claude/agents/` |
-| `graph` | ❌ | 不复制图谱模板 |
-| `ci` | ❌ | 不复制 CI 门禁 |
 
-**需手动补充的：**
+**不需要 `fullstack-node-py` profile**——probe 无业务代码，Wiki、standards L1/L2、task bootstrap 都是冗余。
+
+**AGENTS.md / CLAUDE.md 已有模板**：
+
+`cyning-harness/ide/adapters/` 下有：
+
+- `CLAUDE.md.fragment.example` → Harness Starter 薄层（Claude Code 用）
+- `AGENTS.md.fragment.example` → Harness Starter 通用 Agent 入口
+
+这两个片段覆盖了：task 执行前纪律（读 task、GATE_VERIFY、HG-AUDIT-R1 拒改码）、合并前验证、invoke 路径、关键词和 POINTER。probe 只需在 AGENTS 片段基础上追加 **专属读序 + 命令 + 边界**（约 20 行）。
+
+**需手动补充的（不能从 cyning-harness 拿到的）：**
 
 | 项 | 方式 | 工作量 |
 | --- | --- | --- |
-| `CLAUDE.md` | 手动创建（薄指针 → AGENTS.md）| XS |
-| `AGENTS.md` 重写 | 基于工作区模板 + probe 专用内容 | S |
+| AGENTS.md probe 专属段 | 在片段下方追加读序、命令、边界 | XS |
 | `.claude/agents/harness-probe-agent.md` | 参照工作区 `harness-00-orchestrator.md` 简化 | S |
 | `.claude/settings.json` | 参照工作区 baseline | XS |
-| `tools/harness_task_validate.py` | 从 IMP-09 结果中定制 | M |
-| `.github/workflows/tech-graph.yml` | 新增 CI | S |
-
-**为什么不全用 cyning-harness？**
-
-`@cyning/harness` 是"纪律包"——提供 prompts、模板、读序约定。它不提供：
-- 项目专属 CLAUDE.md / AGENTS.md
-- 业务技术图谱
-- `.claude/` IDE 配置
-- 项目专属 CI
-
-所以正确做法是：**`npx @cyning/harness init` 打底 → 手动补 AGENTS 和图谱。**
+| `docs/_tech_graph/` + `graph.json` | 手写 6 个 `.ai.md` → 手写 graph.json | M |
+| `tools/harness_task_validate.py` | 从 `ai-ink-brain-api-python` 复制定制版 | S |
+| `.github/workflows/tech-graph.yml` | 新增 task_validate job | S |
 
 ---
 
@@ -278,38 +277,41 @@ jobs:
 
 ---
 
-## 5. 执行顺序
+## 5. 执行顺序（修正版）
 
 ```text
 Step 1: npx @cyning/harness init --preset harness-only --ide cursor
         → 复制 prompts / invoke 模板 / .cursor/rules
 
-Step 2: 手动创建 CLAUDE.md + 重写 AGENTS.md
-        → 包含完整的 probe 帽链纪律、读序、边界
+Step 2: 从 cyning-harness/ide/adapters/ 取 AGENTS.md.fragment.example + CLAUDE.md.fragment.example
+        → AGENTS 片段末尾追加 probe 专属段（读序、命令、边界，~20 行）
+        → CLAUDE 片段直接用作 CLAUDE.md（薄层 POINTER）
 
 Step 3: 手动创建 .claude/agents/harness-probe-agent.md
-        → 简化版 harness agent
+        → 简化版 harness agent（YAML frontmatter + 必读指向）
 
 Step 4: 创建 docs/_tech_graph/ 6 个 .ai.md → 手工汇编 graph.json
         → ≤30 节点，覆盖全部 src/ 模块
 
 Step 5: 复制 tools/harness_task_validate.py + .github/workflows/tech-graph.yml
-        → CI 门禁
+        → CI 门禁含 IMP-09 human_gate 校验
 
-Step 6: 验证：用新 AGENTS.md + 图谱重新执行一个 task
-        → 确认 Agent 能走完整帽链落盘
+Step 6: 验证：用新 AGENTS + 图谱重新执行一个 task
+        → 确认 Agent 能走完整 00→30→40→50 帽链落盘
 ```
 
 ---
 
 ## 6. 决策点（需人确认）
 
-| 问题 | 建议 | 备选 |
+| 问题 | 建议 | 理由 |
 | --- | --- | --- |
-| 图谱工具链 | 先手写 graph.json（模块少且稳定） | Phase 2 引入正式导出 |
-| `@cyning/harness` profile | `harness-only`（不覆盖业务 task） | 全量 fullstack（会覆盖 coding_wiki 等） |
-| task_validate 脚本 | 从 api-python 复制定制版 | 从零写轻量版 |
-| `.claude/agents/` 是否需要 spawn | 先单 agent 模式 | Phase 2 引入 spawn |
+| `@cyning/harness` profile | `harness-only` | fullstack 带 Wiki + standards L1/L2 + task bootstrap，probe 不需要 |
+| AGENTS.md 来源 | `ide/adapters/AGENTS.md.fragment.example` + 追加 probe 段 | 片段已覆盖 Harness 纪律 80%，只需补 ~20 行专属内容 |
+| CLAUDE.md 来源 | `ide/adapters/CLAUDE.md.fragment.example` 直接使用 | 薄层 POINTER，probe 无需改写 |
+| 图谱工具链 | 先手写 graph.json（≤30 节点） | 模块少且稳定，Phase 2 引入正式导出 |
+| task_validate 脚本 | 从 `ai-ink-brain-api-python` 复制定制版 | 含 IMP-09 human_gate 校验 |
+| `.claude/agents/` | 先单 agent 模式 | probe 改动范围小，不需要 spawn 多 agent |
 
 ---
 
