@@ -105,6 +105,34 @@ def parse_human_gates(text: str) -> list[HumanGate]:
     return gates
 
 
+def validate_human_gate_rules(gates: list[HumanGate]) -> list[str]:
+    """校验 human_gate 表与 blocks_hats 规则（对齐 IMP-09 / PROMPT §4.5）。"""
+    errors: list[str] = []
+    if not gates:
+        errors.append("HUMAN-GATE-MISSING: task 须含 human_gate 表")
+        return errors
+
+    blocks_values = set()
+    for gate in gates:
+        blocks_values.update(gate.blocks_hats)
+
+    if "30" in blocks_values:
+        audit_r1 = any(g.gate_id == "HG-AUDIT-R1" for g in gates)
+        if not audit_r1:
+            errors.append(
+                "HUMAN-GATE-AUDIT-R1-MISSING: blocks_hats 含 30 时须含 HG-AUDIT-R1"
+            )
+
+    return errors
+
+
+def validate_task_markdown(path: str | Path) -> list[str]:
+    """对 task.md 执行 PRE_SPAWN_VERIFY 级静态校验。"""
+    text = Path(path).read_text(encoding="utf-8")
+    gates = parse_human_gates(text)
+    return validate_human_gate_rules(gates)
+
+
 def load_wiki_stub(path: str | Path) -> list[WikiEntry]:
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     return [WikiEntry.model_validate(item) for item in raw]

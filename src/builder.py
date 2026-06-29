@@ -50,9 +50,17 @@ def build_subagent_prompt(
 
 {task.dynamic_query}
 
+【禁止】
+- 在业务 *.graph.yaml 新增 guardrails / token cap / max_retries 字段（Runtime 归产品 Host）
+- 将 failure_paths 全文粘贴进本 Prompt；只以上方 AcceptanceContract 表为准
+
 【回报硬格式】
 Status / Deliverables / Blockers / Judgment（各≤10行）
-failure_path_ref 表：| ref | pass/fail | evidence |
+
+【failure_path_ref 收工表】（30 / 40 帽必填）
+| ref | pass/fail | evidence |
+| --- | --- | --- |
+| F1 | pass | 命令/文件:行 |
 """
 
     static_chars = len(static_prefix) + len(semi_static)

@@ -1,10 +1,40 @@
 """Harness Probe tests"""
 
-from src.compiler import compile_contracts_from_task, parse_task_markdown
+from src.compiler import (
+    compile_contracts_from_task,
+    parse_task_markdown,
+    validate_human_gate_rules,
+    validate_task_markdown,
+)
 from src.graph_loader import load_graph, query_subgraph
+from src.models import HumanGate
 
 
 SAMPLE_TASK = """
+## 失败路径
+| 触发条件 | 系统行为 | 可重试 | 用户可见 |
+| hits == 0 | fallback | 否 | no_data |
+"""
+
+TASK_NO_HG = """
+## Harness 元信息
+| 字段 | 值 |
+| **test_strategy** | `recommended` |
+
+## 失败路径
+| 触发条件 | 系统行为 | 可重试 | 用户可见 |
+| hits == 0 | fallback | 否 | no_data |
+"""
+
+TASK_HG_NO_AUDIT_R1 = """
+## Harness 元信息
+| 字段 | 值 |
+| **test_strategy** | `recommended` |
+
+### 人工闸 `human_gate`
+| human_gate_id | status | blocks_hats | 说明 |
+| HG-TASK-DRAFT | approved | 30 | 探针示例 |
+
 ## 失败路径
 | 触发条件 | 系统行为 | 可重试 | 用户可见 |
 | hits == 0 | fallback | 否 | no_data |
@@ -30,3 +60,29 @@ def test_parse_sample_task():
     assert task.entry_node == "RAG"
     assert len(task.contracts) >= 2
     assert task.is_gate_approved("HG-AUDIT-R1")
+
+
+def test_validate_human_gate_rules_ok():
+    gates = [
+        HumanGate(gate_id="HG-TASK-DRAFT", status="approved", blocks_hats=["22-R1", "30"]),
+        HumanGate(gate_id="HG-AUDIT-R1", status="approved", blocks_hats=["30"]),
+    ]
+    assert validate_human_gate_rules(gates) == []
+
+
+def test_validate_human_gate_missing():
+    assert validate_human_gate_rules([]) == ["HUMAN-GATE-MISSING: task 须含 human_gate 表"]
+
+
+def test_validate_audit_r1_missing():
+    gates = [HumanGate(gate_id="HG-TASK-DRAFT", status="approved", blocks_hats=["30"])]
+    errors = validate_human_gate_rules(gates)
+    assert len(errors) == 1
+    assert "HUMAN-GATE-AUDIT-R1-MISSING" in errors[0]
+
+
+def test_validate_task_markdown(tmp_path):
+    bad = tmp_path / "bad.md"
+    bad.write_text(TASK_HG_NO_AUDIT_R1, encoding="utf-8")
+    errors = validate_task_markdown(bad)
+    assert any("HUMAN-GATE-AUDIT-R1-MISSING" in e for e in errors)

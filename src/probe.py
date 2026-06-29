@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from src.compiler import parse_task_markdown
+from src.compiler import parse_task_markdown, validate_task_markdown
 from src.graph_loader import load_graph, query_subgraph
 from src.orchestrator import HarnessProbeCore
 
@@ -22,6 +22,35 @@ def _load_config() -> dict:
     if not cfg_path.exists():
         return {}
     return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """PRE_SPAWN_VERIFY：校验 task 人闸与 Harness 规则，不生成 Prompt。"""
+    task_path = Path(args.task)
+    if not task_path.is_absolute():
+        task_path = _repo_root() / task_path
+    if not task_path.is_file():
+        print(f"BLOCKED: file not found: {task_path}", file=sys.stderr)
+        return 2
+
+    errors = validate_task_markdown(task_path)
+    if errors:
+        print(f"=== {task_path.relative_to(_repo_root())} ===")
+        for err in errors:
+            print(f"[ERROR] {err}")
+        print("BLOCKED")
+        return 1
+
+    task = parse_task_markdown(task_path)
+    if task.blocks_hat("30") and not task.is_gate_approved("HG-AUDIT-R1"):
+        print(f"=== {task_path.relative_to(_repo_root())} ===")
+        print("[ERROR] HG-AUDIT-R1 pending but blocks 30 · 禁止派工 30")
+        print("BLOCKED")
+        return 1
+
+    print(f"=== {task_path.relative_to(_repo_root())} ===")
+    print("OK · PRE_SPAWN_VERIFY pass")
+    return 0
 
 
 def cmd_compile(args: argparse.Namespace) -> int:
@@ -68,6 +97,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Harness Probe · L0/L1/L1.5/L2 探针")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_verify = sub.add_parser("verify", help="PRE_SPAWN_VERIFY · 校验 task 人闸与规则")
+    p_verify.add_argument("--task", default="data/tasks/sample_task.md")
+    p_verify.set_defaults(func=cmd_verify)
 
     p_compile = sub.add_parser("compile", help="编译 Prompt + L1.5 快照（dry-run）")
     p_compile.add_argument("--task", default="data/tasks/sample_task.md")
