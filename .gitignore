@@ -6,3 +6,4 @@ outputs/*
 !outputs/.gitkeep
 .pytest_cache/
 *.egg-info/
+.cyning-harness/
