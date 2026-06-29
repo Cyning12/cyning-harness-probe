@@ -66,6 +66,20 @@ def cmd_compile(args: argparse.Namespace) -> int:
     task = parse_task_markdown(task_path, dynamic_query=args.query or "")
     if args.entry:
         task = task.model_copy(update={"entry_node": args.entry})
+    if args.hat:
+        task = task.model_copy(update={"planned_hats": args.hat.split(",")})
+    if args.spec:
+        spec_path = Path(args.spec)
+        if not spec_path.is_absolute():
+            spec_path = _repo_root() / spec_path
+        spec_text = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
+        task = task.model_copy(update={"spec_path": str(args.spec), "spec_text": spec_text})
+    if args.review_target:
+        task = task.model_copy(update={"review_target": args.review_target})
+    if args.run_output:
+        task = task.model_copy(update={"run_output_path": args.run_output})
+    if args.mode:
+        task = task.model_copy(update={"reinspect_mode": args.mode})
 
     core = HarnessProbeCore(
         graph,
@@ -91,7 +105,88 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    return cmd_compile(args)
+    cfg = _load_config()
+    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
+    if not graph_path.is_absolute():
+        graph_path = _repo_root() / graph_path
+    task_path = Path(args.task)
+    if not task_path.is_absolute():
+        task_path = _repo_root() / task_path
+
+    graph = load_graph(graph_path)
+    task = parse_task_markdown(task_path, dynamic_query=args.query or "")
+    if args.entry:
+        task = task.model_copy(update={"entry_node": args.entry})
+    if args.hat:
+        task = task.model_copy(update={"planned_hats": args.hat.split(",")})
+    if args.spec:
+        spec_path = Path(args.spec)
+        if not spec_path.is_absolute():
+            spec_path = _repo_root() / spec_path
+        spec_text = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
+        task = task.model_copy(update={"spec_path": str(args.spec), "spec_text": spec_text})
+    if args.review_target:
+        task = task.model_copy(update={"review_target": args.review_target})
+    if args.run_output:
+        task = task.model_copy(update={"run_output_path": args.run_output})
+    if args.mode:
+        task = task.model_copy(update={"reinspect_mode": args.mode})
+
+    core = HarnessProbeCore(
+        graph,
+        _repo_root() / cfg.get("probe", {}).get("default_wiki", "data/wiki/syntheses_stub.json"),
+        output_dir=_repo_root() / "outputs",
+    )
+    run_result = core.run_task(
+        task,
+        dry_run=True,
+        show_prompt=not args.quiet,
+        from_hat=args.from_hat,
+        to_hat=args.to_hat,
+    )
+    print(f"\n✅ run 完成 · session={run_result.session_id} · status={run_result.status}")
+    print(f"   nodes: {[(n.hat, n.status.value) for n in run_result.nodes]}")
+    print(f"   见 outputs/prompt_*.md 与 outputs/task_run_{run_result.session_id}.json")
+    return 0
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """监视 freeze_id 漂移。"""
+    import time
+
+    cfg = _load_config()
+    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
+    if not graph_path.is_absolute():
+        graph_path = _repo_root() / graph_path
+    task_path = Path(args.task)
+    if not task_path.is_absolute():
+        task_path = _repo_root() / task_path
+
+    interval = args.interval
+
+    while True:
+        graph = load_graph(graph_path)
+        task = parse_task_markdown(task_path)
+        graph_freeze = graph.freeze_id
+        task_freeze = task.freeze_id or "（未设置）"
+        consistent = graph_freeze == task_freeze
+
+        impacted = []
+        if not consistent and args.entry:
+            sub = query_subgraph(graph, args.entry, depth=1)
+            impacted = sub.node_ids
+
+        print(f"[{time.strftime('%H:%M:%S')}] "
+              f"graph={graph_freeze} task={task_freeze} "
+              f"{'✅ 一致' if consistent else '⚠️ 漂移'}")
+        if not consistent:
+            print(f"    影响节点: {', '.join(impacted) if impacted else '(未指定 --entry)'}")
+            print(f"    建议: harness verify --impact {args.entry or '?'}")
+
+        if args.once:
+            return 0 if consistent else 1
+
+        time.sleep(interval)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,17 +201,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_compile.add_argument("--task", default="data/tasks/sample_task.md")
     p_compile.add_argument("--graph", default=None)
     p_compile.add_argument("--entry", default=None, help="覆盖 task entry_node")
+    p_compile.add_argument("--hat", default=None, help="指定帽子，逗号分隔，如 10-spec,20-review,30,40")
+    p_compile.add_argument("--spec", default=None, help="10-task 关联的 SPEC 文件路径")
+    p_compile.add_argument("--review-target", default=None, choices=["task", "spec"], help="20-review 审核对象")
+    p_compile.add_argument("--run-output", default=None, help="50-reinspect 关联的 task_run JSON 路径")
+    p_compile.add_argument("--mode", default=None, choices=["independent", "global"], help="50-reinspect 模式")
     p_compile.add_argument("--query", default=None)
     p_compile.add_argument("--quiet", action="store_true")
     p_compile.set_defaults(func=cmd_compile)
 
-    p_run = sub.add_parser("run", help="同 compile（默认 dry-run）")
+    p_run = sub.add_parser("run", help="模拟执行多帽序列（dry-run）")
     p_run.add_argument("--task", default="data/tasks/sample_task.md")
     p_run.add_argument("--graph", default=None)
     p_run.add_argument("--entry", default=None)
+    p_run.add_argument("--hat", default=None, help="指定帽子，逗号分隔")
+    p_run.add_argument("--from-hat", default=None, help="起始帽子，如 10-spec")
+    p_run.add_argument("--to-hat", default=None, help="结束帽子，如 50-reinspect")
+    p_run.add_argument("--spec", default=None)
+    p_run.add_argument("--review-target", default=None, choices=["task", "spec"])
+    p_run.add_argument("--run-output", default=None)
+    p_run.add_argument("--mode", default=None, choices=["independent", "global"])
     p_run.add_argument("--query", default=None)
     p_run.add_argument("--quiet", action="store_true")
     p_run.set_defaults(func=cmd_run)
+
+    p_watch = sub.add_parser("watch", help="监视 freeze_id 漂移")
+    p_watch.add_argument("--graph", default=None)
+    p_watch.add_argument("--task", default="data/tasks/sample_task.md")
+    p_watch.add_argument("--entry", default=None, help="影响分析入口节点")
+    p_watch.add_argument("--interval", type=int, default=5, help="轮询秒数，默认 5")
+    p_watch.add_argument("--once", action="store_true", help="只检测一次")
+    p_watch.set_defaults(func=cmd_watch)
 
     p_gq = sub.add_parser("graph-query", help="L0 子图查询")
     p_gq.add_argument("--node", required=True)

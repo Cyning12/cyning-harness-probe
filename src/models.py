@@ -70,6 +70,11 @@ class HarnessTask(BaseModel):
     contracts: list[AcceptanceContract] = Field(default_factory=list)
     human_gates: list[HumanGate] = Field(default_factory=list)
     dynamic_query: str = ""
+    spec_path: str | None = None
+    spec_text: str = ""
+    review_target: str | None = None
+    run_output_path: str | None = None
+    reinspect_mode: str = "independent"
 
     def is_gate_approved(self, gate_id: str) -> bool:
         for gate in self.human_gates:

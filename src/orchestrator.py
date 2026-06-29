@@ -6,7 +6,7 @@ import json
 import uuid
 from pathlib import Path
 
-from src.builder import build_subagent_prompt, print_cache_boundary
+from src.builder import build_hat_prompt, print_cache_boundary
 from src.compiler import load_wiki_stub, parse_task_markdown, retrieve_wiki
 from src.graph_loader import load_graph, query_subgraph
 from src.models import BlockedError, HarnessTask, RunNodeStatus, TaskRunGraph, TechGraph
@@ -46,6 +46,8 @@ class HarnessProbeCore:
         task: HarnessTask,
         dry_run: bool = True,
         show_prompt: bool = True,
+        from_hat: str | None = None,
+        to_hat: str | None = None,
     ) -> TaskRunGraph:
         session_id = uuid.uuid4().hex[:12]
         run_graph = TaskRunGraph(
@@ -58,6 +60,13 @@ class HarnessProbeCore:
         self.gate_scan(task, task.planned_hats)
         self.pre_spawn_verify(task)
 
+        hats = task.planned_hats
+        if from_hat or to_hat:
+            from_idx = task.planned_hats.index(from_hat) if from_hat and from_hat in task.planned_hats else 0
+            to_idx = task.planned_hats.index(to_hat) + 1 if to_hat and to_hat in task.planned_hats else len(task.planned_hats)
+            hats = task.planned_hats[from_idx:to_idx]
+
+
         subgraph = query_subgraph(self.graph, task.entry_node, depth=2)
         wiki_hits = retrieve_wiki(
             self.wiki_entries,
@@ -66,7 +75,7 @@ class HarnessProbeCore:
         )
 
         handoff_summary = "（首轮无上一帽）"
-        for hat in task.planned_hats:
+        for hat in hats:
             run_node = run_graph.append_hat(
                 hat,
                 [c.ref for c in task.contracts],
@@ -78,12 +87,13 @@ class HarnessProbeCore:
                     "dynamic_query": f"{task.dynamic_query}\n\n上一帽摘要: {handoff_summary}"
                 }
             )
-            compiled = build_subagent_prompt(
+            compiled = build_hat_prompt(
+                hat,
                 self.graph,
                 task_with_handoff,
-                hat,
                 subgraph,
                 wiki_hits,
+                handoff_summary=handoff_summary,
             )
 
             prompt_path = self.output_dir / f"prompt_{session_id}_hat{hat}.md"

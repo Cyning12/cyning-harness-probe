@@ -1,5 +1,6 @@
 """Harness Probe tests"""
 
+from src.builder import build_hat_prompt
 from src.compiler import (
     compile_contracts_from_task,
     parse_task_markdown,
@@ -60,6 +61,48 @@ def test_parse_sample_task():
     assert task.entry_node == "RAG"
     assert len(task.contracts) >= 2
     assert task.is_gate_approved("HG-AUDIT-R1")
+
+
+def test_build_10_spec_prompt():
+    graph = load_graph("data/graph/sample_graph_v2.json")
+    task = parse_task_markdown("data/tasks/sample_task.md")
+    subgraph = query_subgraph(graph, task.entry_node, depth=2)
+    compiled = build_hat_prompt("10-spec", graph, task, subgraph, [])
+    assert "10-spec" in compiled.semi_static
+    assert "R0–R5" in compiled.dynamic_suffix or "R0-R5" in compiled.dynamic_suffix
+    assert "SPEC 草案" in compiled.dynamic_suffix
+
+
+def test_build_10_task_prompt():
+    graph = load_graph("data/graph/sample_graph_v2.json")
+    task = parse_task_markdown("data/tasks/sample_task.md")
+    subgraph = query_subgraph(graph, task.entry_node, depth=2)
+    compiled = build_hat_prompt("10-task", graph, task, subgraph, [])
+    assert "10-task" in compiled.semi_static
+    assert "task.md 骨架" in compiled.dynamic_suffix
+    assert "failure_paths" in compiled.dynamic_suffix
+
+
+def test_build_20_review_prompt():
+    graph = load_graph("data/graph/sample_graph_v2.json")
+    task = parse_task_markdown("data/tasks/sample_task.md")
+    task = task.model_copy(update={"review_target": "task"})
+    subgraph = query_subgraph(graph, task.entry_node, depth=2)
+    compiled = build_hat_prompt("20-review", graph, task, subgraph, [])
+    assert "20-review" in compiled.semi_static
+    assert "approved / blocked" in compiled.dynamic_suffix
+    assert "HG-AUDIT-R1" in compiled.dynamic_suffix
+
+
+def test_build_50_reinspect_prompt():
+    graph = load_graph("data/graph/sample_graph_v2.json")
+    task = parse_task_markdown("data/tasks/sample_task.md")
+    task = task.model_copy(update={"reinspect_mode": "global"})
+    subgraph = query_subgraph(graph, task.entry_node, depth=2)
+    compiled = build_hat_prompt("50-reinspect", graph, task, subgraph, [])
+    assert "50-reinspect global" in compiled.dynamic_suffix
+    assert "failure_path_ref" in compiled.dynamic_suffix
+    assert "CLOSE" in compiled.dynamic_suffix
 
 
 def test_validate_human_gate_rules_ok():
