@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Bash(pytest *)",
+      "Bash(npx *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(find *)",
+      "Bash(source *)",
+      "Bash(echo *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)",
+      "Bash(git -C *)"
+    ]
+  }
+}
