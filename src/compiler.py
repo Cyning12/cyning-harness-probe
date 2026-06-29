@@ -15,7 +15,7 @@ TABLE_ROW = re.compile(
     re.MULTILINE,
 )
 GATE_ROW = re.compile(
-    r"^\|\s*(?P<gate_id>HG-[A-Z0-9-]+)\s*\|\s*(?P<status>pending|approved)\s*\|\s*(?P<blocks>[^|]+)\|",
+    r"^\|\s*(?P<gate_id>HG-[A-Z0-9-]+)\s*\|\s*`?(?P<status>pending|approved)`?\s*\|\s*(?P<blocks>[^|]+)\|",
     re.MULTILINE,
 )
 ENTRY_NODE = re.compile(r"^## entry_node\s*\n\s*`(?P<node>[^`]+)`", re.MULTILINE)

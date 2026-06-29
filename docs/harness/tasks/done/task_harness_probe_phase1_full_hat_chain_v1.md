@@ -36,8 +36,8 @@
 
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
-| HG-TASK-DRAFT | `approved` | 20-task-audit R1, 30 | 00 起草 · 人签 |
-| HG-AUDIT-R1 | `approved` | 30 | 20-task-audit R1 通过 · 人签 |
+| HG-TASK-DRAFT | approved | 20-task-audit R1, 30 | 00 起草 · 人签 |
+| HG-AUDIT-R1 | approved | 30 | 20-task-audit R1 通过 · 人签 |
 
 ---
 
