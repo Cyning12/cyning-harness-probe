@@ -1,7 +1,8 @@
 # Harness Probe
 
 > **Harness 探针工程** — 验证 L0 图谱编译 + L1 验收合约 + L2 冷记忆 + KV-Cache 友好 Prompt 组装。  
-> **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。
+> **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。  
+> **当前版本**：**v0.2** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
 
 **仓库**：https://github.com/Cyning12/cyning-harness-probe · `git@github.com:Cyning12/cyning-harness-probe.git`
 
