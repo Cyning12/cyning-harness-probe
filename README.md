@@ -2,7 +2,7 @@
 
 > **Harness 探针工程** — 验证 L0 图谱编译 + L1 验收合约 + L2 冷记忆 + KV-Cache 友好 Prompt 组装。  
 > **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。  
-> **当前版本**：**v0.2** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
+> **当前版本**：**v0.3** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
 
 **仓库**：https://github.com/Cyning12/cyning-harness-probe · `git@github.com:Cyning12/cyning-harness-probe.git`
 
@@ -13,11 +13,21 @@ cd harness-probe
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 编译 Prompt + 生成 L1.5 快照（dry-run）
-python -m src.probe compile --task data/tasks/sample_task.md --entry RAG
+# 编译全帽链 Prompt（dry-run）
+python -m src.probe compile --task data/tasks/sample_task.md --entry RAG --hat 10-spec,20-review,30,40
+python -m src.probe compile --task data/tasks/sample_task.md --entry RAG --hat 50-reinspect --mode global
 
 # L0 子图查询
 python -m src.probe graph-query --node RAG --depth 2
+
+# PRE_SPAWN_VERIFY 人闸校验
+python -m src.probe verify --task data/tasks/sample_task.md
+
+# 模拟执行（30→40）
+python -m src.probe run --from-hat 30 --to-hat 40
+
+# freeze_id 漂移检测
+python -m src.probe watch --once --entry RAG
 
 # 测试
 pytest tests/ -q

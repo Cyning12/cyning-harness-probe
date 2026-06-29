@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3 · 2026-06-29
+
+### Added
+
+- **全帽链补齐**：`compile --hat` 支持 10-spec / 10-task / 20-review / 50-reinspect 四顶新帽。
+  - `10-spec`：生成 SPEC 草案 Prompt（R0–R5、Delta、验收标准）。
+  - `10-task`：生成 task 骨架 Prompt（SPEC→failure_paths 映射）。
+  - `20-review`：生成审核 Prompt（approved/blocked + HG-AUDIT-R1 签收）。
+  - `50-reinspect`：生成复检 Prompt（failure_path_ref 表 + independent/global 双模式）。
+- **`--run` 模式**：`python -m src.probe run --from-hat 30 --to-hat 40` 串行模拟执行并落盘 task_run JSON。
+- **`--watch` 模式**：`python -m src.probe watch --once` 检测 graph 与 task 的 freeze_id 漂移。
+- **CLI 新增参数**：`--spec`（关联 SPEC）、`--review-target`（审核对象）、`--mode`（independent/global）、`--run-output`（关联运行记录）。
+
+### Changed
+
+- `builder.py`：重构为 `build_hat_prompt()` 分发函数；原 30/40 builder 保留。
+- `orchestrator.py`：改用 `build_hat_prompt` + `handoff_summary`；支持 `from_hat`/`to_hat` 过滤。
+- `models.py`：`HarnessTask` 新增 `spec_path`/`spec_text`/`review_target`/`run_output_path`/`reinspect_mode`。
+
+### Commits
+
+- `8b23630` `feat(phase1): full hat chain support · 10-spec/10-task/20-review/50-reinspect + --run + --watch`
+
 ## v0.2 · 2026-06-29
 
 ### Added

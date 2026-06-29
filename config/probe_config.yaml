@@ -1,4 +1,4 @@
-# Harness Probe 配置（v0.2）
+# Harness Probe 配置（v0.3）
 probe:
   default_graph: data/graph/sample_graph_v2.json
   default_wiki: data/wiki/syntheses_stub.json
