@@ -1,0 +1,30 @@
+{
+  "schema_version": "graph_v2",
+  "freeze_id": "HARNESS-PROBE-GRAPH-V1",
+  "generated_at": "2026-06-29T00:00:00Z",
+  "nodes": [
+    {"id": "CLI", "label": "probe CLI", "kind": "entry", "module_id": "CLI", "graph_id": "probe"},
+    {"id": "ORCHESTRATOR", "label": "HarnessProbeCore", "kind": "service", "module_id": "ORCHESTRATOR", "graph_id": "probe"},
+    {"id": "COMPILER", "label": "compiler.py", "kind": "service", "module_id": "COMPILER", "graph_id": "probe"},
+    {"id": "BUILDER", "label": "builder.py", "kind": "service", "module_id": "BUILDER", "graph_id": "probe"},
+    {"id": "GRAPH_LOADER", "label": "graph_loader.py", "kind": "service", "module_id": "GRAPH_LOADER", "graph_id": "probe"},
+    {"id": "MODELS", "label": "models.py", "kind": "data", "module_id": "MODELS", "graph_id": "probe"},
+    {"id": "CYNING_HARNESS", "label": "@cyning/harness", "kind": "external", "module_id": "CYNING_HARNESS", "graph_id": "probe"},
+    {"id": "WORKSPACE", "label": "Ink 工作区", "kind": "external", "module_id": "WORKSPACE", "graph_id": "probe"}
+  ],
+  "edges": [
+    {"from": "CLI", "to": "ORCHESTRATOR", "mark": "->", "type": "depends_on", "label": "cmd_run → HarnessProbeCore.run_task", "graph_id": "probe"},
+    {"from": "CLI", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "cmd_verify → validate_task_markdown", "graph_id": "probe"},
+    {"from": "CLI", "to": "GRAPH_LOADER", "mark": "->", "type": "depends_on", "label": "cmd_graph_query / cmd_watch", "graph_id": "probe"},
+    {"from": "ORCHESTRATOR", "to": "BUILDER", "mark": "->", "type": "depends_on", "label": "run_task → build_hat_prompt", "graph_id": "probe"},
+    {"from": "ORCHESTRATOR", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "retrieve_wiki", "graph_id": "probe"},
+    {"from": "ORCHESTRATOR", "to": "GRAPH_LOADER", "mark": "->", "type": "depends_on", "label": "load_graph / query_subgraph", "graph_id": "probe"},
+    {"from": "BUILDER", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "format_contract_table", "graph_id": "probe"},
+    {"from": "COMPILER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "HarnessTask / AcceptanceContract", "graph_id": "probe"},
+    {"from": "GRAPH_LOADER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "TechGraph / SubgraphResult", "graph_id": "probe"},
+    {"from": "ORCHESTRATOR", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "TaskRunGraph / BlockedError", "graph_id": "probe"},
+    {"from": "BUILDER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "CompiledPrompt", "graph_id": "probe"},
+    {"from": "CLI", "to": "CYNING_HARNESS", "mark": "..>", "type": "optional_depends_on", "label": "verify 可 shell out npx harness", "graph_id": "probe"},
+    {"from": "CLI", "to": "WORKSPACE", "mark": "..>", "type": "references", "label": "link PROMPT_cursor_task_chain_serial_v1.md", "graph_id": "probe"}
+  ]
+}
