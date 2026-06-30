@@ -13,8 +13,9 @@
 | 帽 | invoke | 状态 |
 | --- | --- | --- |
 | 00 派工 | [`invoke_00_dispatch_20260630.md`](./invoke_00_dispatch_20260630.md) | done |
+| 00 统筹派工+关账 | [`invoke_00_orchestrate_full_chain_20260630.md`](./invoke_00_orchestrate_full_chain_20260630.md) | in_progress |
 | 20-task-audit R1 | [`invoke_20_task_audit_r1_20260630.md`](./invoke_20_task_audit_r1_20260630.md) | done |
-| 30 执行 v0.6-a1 | [`invoke_30_execute_a1_20260630.md`](./invoke_30_execute_a1_20260630.md) | in_progress |
+| 30 执行 v0.6-a1 | [`invoke_30_execute_a1_20260630.md`](./invoke_30_execute_a1_20260630.md) | pending |
 | 40 自检 v0.6-a1 | （待 30 完成后生成） | pending |
 | 50 关账 v0.6-a1 | （待 40 完成后生成） | pending |
 | 30 执行 v0.6-a2 | （待 v0.6-a1 合并后生成） | pending |
