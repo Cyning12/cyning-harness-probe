@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.6 · 2026-06-30
+
+### Added
+
+- **CLI 真实执行**：`run` 子命令新增 `--executor {mock,real}`、`--max-retries N`、`--cwd PATH`。
+  - 默认 `--executor mock`，行为与 v0.5 dry-run 一致。
+  - `--executor real` 时创建 `SubprocessExecutor` 真实执行 `contract.verify`。
+  - `--cwd` 指定真实执行的工作目录。
+- **Runner 重跑逻辑**：`TaskRunner.run_sequence` 支持 `max_retries`。
+  - contract 失败时最多重跑 `max_retries` 次。
+  - 重跑耗尽后 `run_node.status = blocked`，`run_graph.status = blocked`。
+  - 失败 contract 的 evidence 保留最后一次结果。
+- **MCP Tool 扩展**：`probe_run` 支持 `executor`、`max_retries`、`cwd`；`probe_audit` 识别 blocked 节点并输出 `recommendation="打回至 30 · 补跑 verify_cmd"` 与 `next_hat="30"`。
+- **端到端测试**：新增 CLI 与 MCP 对 `--executor real`、重跑、blocked 审计的覆盖。
+
+### Changed
+
+- `TaskRunner` 构造函数新增 `cwd` 参数。
+- `SubprocessExecutor.run` 在执行 contract.verify 时透传 `cwd`。
+
 ## v0.5 · 2026-06-30
 
 ### Added

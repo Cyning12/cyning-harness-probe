@@ -2,7 +2,7 @@
 
 > **Harness 探针工程** — 验证 L0 图谱编译 + L1 验收合约 + L2 冷记忆 + KV-Cache 友好 Prompt 组装。  
 > **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。  
-> **当前版本**：**v0.5** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
+> **当前版本**：**v0.6** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
 
 **仓库**：https://github.com/Cyning12/cyning-harness-probe · `git@github.com:Cyning12/cyning-harness-probe.git`
 
@@ -23,8 +23,17 @@ python -m harness_probe.cli graph-query --node RAG --depth 2
 # PRE_SPAWN_VERIFY 人闸校验
 python -m harness_probe.cli verify --task data/tasks/sample_task.md
 
-# 模拟执行（30→40）
+# 模拟执行（30→40，默认 mock，与 v0.5 行为一致）
 python -m harness_probe.cli run --from-hat 30 --to-hat 40
+
+# 真实执行 contract.verify（需显式授权 --executor real）
+python -m harness_probe.cli run --executor real --from-hat 30 --to-hat 40
+
+# 失败时重跑 2 次
+python -m harness_probe.cli run --executor real --max-retries 2 --from-hat 30 --to-hat 40
+
+# 指定工作目录
+python -m harness_probe.cli run --executor real --cwd . --from-hat 30 --to-hat 40
 
 # freeze_id 漂移检测
 python -m harness_probe.cli watch --once --entry RAG

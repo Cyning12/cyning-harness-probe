@@ -19,6 +19,7 @@ from harness_probe.io import (
 )
 from harness_probe.rendering import print_cache_boundary
 from harness_sdk import TaskRunner
+from harness_sdk.executor import SubprocessExecutor
 from harness_sdk.graph import query_subgraph
 
 
@@ -156,10 +157,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     output_dir = _repo_root() / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    runner = TaskRunner(task, graph, load_wiki_stub(wiki_path))
+    executor = None
+    if args.executor == "real":
+        executor = SubprocessExecutor()
+
+    cwd = None
+    if args.cwd:
+        cwd_path = Path(args.cwd)
+        if not cwd_path.is_dir():
+            print(f"BLOCKED: --cwd not found or not a directory: {args.cwd}", file=sys.stderr)
+            return 2
+        cwd = str(cwd_path.resolve())
+
+    runner = TaskRunner(task, graph, load_wiki_stub(wiki_path), executor=executor, cwd=cwd)
     run_result = runner.run_sequence(
         from_hat=args.from_hat,
         to_hat=args.to_hat,
+        max_retries=args.max_retries,
     )
     _persist_run_outputs(runner, run_result, output_dir, show_prompt=not args.quiet)
     print(f"\n✅ run 完成 · session={run_result.session_id} · status={run_result.status}")
@@ -246,6 +260,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--mode", default=None, choices=["independent", "global"])
     p_run.add_argument("--query", default=None)
     p_run.add_argument("--quiet", action="store_true")
+    p_run.add_argument(
+        "--executor",
+        default="mock",
+        choices=["mock", "real"],
+        help="执行器类型：mock 为 dry-run（默认），real 真实执行 contract.verify",
+    )
+    p_run.add_argument(
+        "--max-retries",
+        type=int,
+        default=0,
+        help="contract 失败时最大重试次数，默认 0",
+    )
+    p_run.add_argument(
+        "--cwd",
+        default=None,
+        help="真实执行时的工作目录，默认使用当前目录",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_watch = sub.add_parser("watch", help="监视 freeze_id 漂移")

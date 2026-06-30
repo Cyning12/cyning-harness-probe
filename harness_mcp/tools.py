@@ -105,6 +105,9 @@ async def probe_run(
     graph_path: str | None = None,
     wiki_path: str | None = None,
     mock: bool = True,
+    executor: str = "mock",
+    max_retries: int = 0,
+    cwd: str | None = None,
     config_path: str | None = None,
 ) -> str:
     """串行模拟执行多顶帽子，生成 L1.5 task_run 轨迹。"""
@@ -116,8 +119,24 @@ async def probe_run(
     task = task.model_copy(update={"entry_node": entry_node})
 
     wiki_entries = load_wiki_stub(wpath)
-    runner = TaskRunner(task, graph, wiki_entries)
-    run_graph = runner.run_sequence(from_hat=from_hat, to_hat=to_hat)
+
+    real_executor = None
+    use_real = executor == "real" or not mock
+    if use_real:
+        from harness_sdk.executor import SubprocessExecutor
+        real_executor = SubprocessExecutor()
+
+    if cwd:
+        cwd_path = Path(cwd)
+        if not cwd_path.is_dir():
+            return json.dumps(
+                {"ok": False, "error": f"cwd not found or not a directory: {cwd}"},
+                ensure_ascii=False,
+            )
+        cwd = str(cwd_path.resolve())
+
+    runner = TaskRunner(task, graph, wiki_entries, executor=real_executor, cwd=cwd)
+    run_graph = runner.run_sequence(from_hat=from_hat, to_hat=to_hat, max_retries=max_retries)
 
     output_dir = _repo_root() / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -164,7 +183,8 @@ async def probe_audit(
         )
 
     run_graph = TaskRunGraph.model_validate_json(path.read_text(encoding="utf-8"))
-    all_pass = all(n.status.value == "done" for n in run_graph.nodes)
+    blocked_nodes = [n for n in run_graph.nodes if n.status.value == "blocked"]
+    all_pass = not blocked_nodes and all(n.status.value == "done" for n in run_graph.nodes)
 
     contract_table = []
     for node in run_graph.nodes:
@@ -174,12 +194,17 @@ async def probe_audit(
                 evidence = json.loads(node.evidence)
             except json.JSONDecodeError:
                 evidence = {"raw": node.evidence}
+        if isinstance(evidence, list):
+            evidence_map = {row.get("ref", ""): row for row in evidence}
+        else:
+            evidence_map = evidence
         for ref in node.contract_refs:
-            ev = evidence.get(ref, {}) if isinstance(evidence, dict) else {}
+            ev = evidence_map.get(ref, {})
+            pass_fail = "pass" if node.status.value == "done" else "fail"
             contract_table.append(
                 {
                     "ref": ref,
-                    "pass_fail": "pass" if node.status.value == "done" else "fail",
+                    "pass_fail": pass_fail,
                     "evidence": ev.get("evidence", "") if isinstance(ev, dict) else str(ev),
                 }
             )
@@ -196,13 +221,18 @@ async def probe_audit(
             ensure_ascii=False,
         )
 
+    if blocked_nodes:
+        summary = f"{len(blocked_nodes)} 个帽子 blocked：" + ", ".join(n.hat for n in blocked_nodes)
+    else:
+        summary = "部分帽子未通过"
+
     return json.dumps(
         {
             "ok": True,
             "verdict": "fail",
-            "summary": "部分帽子未通过",
+            "summary": summary,
             "contract_table": contract_table,
-            "recommendation": "打回至 30 · 补跑 verify_cmd 并附输出摘要",
+            "recommendation": "打回至 30 · 补跑 verify_cmd",
             "next_hat": "30",
         },
         ensure_ascii=False,
