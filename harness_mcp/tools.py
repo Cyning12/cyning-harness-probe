@@ -15,7 +15,6 @@ from harness_probe.io import (
     validate_task_markdown,
 )
 from harness_sdk import TaskRunner
-from harness_sdk.graph import query_subgraph
 from harness_sdk.models import TaskRunGraph
 
 

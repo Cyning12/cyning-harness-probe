@@ -18,10 +18,12 @@ from harness_sdk.compiler import (
     validate_human_gate_rules,
 )
 from harness_sdk.exceptions import BlockedError
+from harness_sdk.executor import SubprocessExecutor, VerifyExecutor
 from harness_sdk.graph import query_subgraph, subgraph_to_mermaid
 from harness_sdk.models import (
     AcceptanceContract,
     CompiledPrompt,
+    ExecutionResult,
     GraphAnchor,
     GraphEdge,
     GraphNode,
@@ -49,12 +51,16 @@ __all__ = [
     "validate_human_gate_rules",
     # exceptions
     "BlockedError",
+    # executor
+    "SubprocessExecutor",
+    "VerifyExecutor",
     # graph
     "query_subgraph",
     "subgraph_to_mermaid",
     # models
     "AcceptanceContract",
     "CompiledPrompt",
+    "ExecutionResult",
     "GraphAnchor",
     "GraphEdge",
     "GraphNode",
