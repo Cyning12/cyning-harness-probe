@@ -159,7 +159,20 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     executor = None
     if args.executor == "real":
-        executor = SubprocessExecutor()
+        cfg = _load_config()
+        safety_cfg = cfg.get("executor", {}).get("safety", {})
+        safety_mode = args.safety_mode or safety_cfg.get("mode", "whitelist")
+        execution_log_dir = args.execution_log_dir or safety_cfg.get("execution_log_dir")
+        if execution_log_dir:
+            elp = Path(execution_log_dir)
+            if not elp.is_absolute():
+                elp = _repo_root() / elp
+            execution_log_dir = str(elp)
+        executor = SubprocessExecutor(
+            safety_mode=safety_mode,
+            dry_run=args.dry_run,
+            execution_log_dir=execution_log_dir,
+        )
 
     cwd = None
     if args.cwd:
@@ -276,6 +289,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--cwd",
         default=None,
         help="真实执行时的工作目录，默认使用当前目录",
+    )
+    p_run.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="不实际执行 contract.verify，仅输出预览",
+    )
+    p_run.add_argument(
+        "--safety-mode",
+        default=None,
+        choices=["whitelist", "audit", "unsafe"],
+        help="安全执行模式：whitelist（默认）/ audit / unsafe",
+    )
+    p_run.add_argument(
+        "--execution-log-dir",
+        default=None,
+        help="执行/拦截事件日志目录，默认不写入",
     )
     p_run.set_defaults(func=cmd_run)
 

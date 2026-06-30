@@ -2,7 +2,7 @@
 
 > **Harness 探针工程** — 验证 L0 图谱编译 + L1 验收合约 + L2 冷记忆 + KV-Cache 友好 Prompt 组装。  
 > **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。  
-> **当前版本**：**v0.6** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
+> **当前版本**：**v0.7** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
 
 **仓库**：https://github.com/Cyning12/cyning-harness-probe · `git@github.com:Cyning12/cyning-harness-probe.git`
 
@@ -29,6 +29,12 @@ python -m harness_probe.cli run --from-hat 30 --to-hat 40
 # 真实执行 contract.verify（需显式授权 --executor real）
 python -m harness_probe.cli run --executor real --from-hat 30 --to-hat 40
 
+# dry-run 模式（不执行，仅预览）
+python -m harness_probe.cli run --executor real --dry-run --from-hat 30 --to-hat 40
+
+# 安全模式：whitelist（默认）/ audit / unsafe
+python -m harness_probe.cli run --executor real --safety-mode audit --from-hat 30 --to-hat 40
+
 # 失败时重跑 2 次
 python -m harness_probe.cli run --executor real --max-retries 2 --from-hat 30 --to-hat 40
 
@@ -51,7 +57,9 @@ harness-probe/
 │   ├── compiler.py
 │   ├── builder.py
 │   ├── graph.py
-│   └── runner.py
+│   ├── runner.py
+│   ├── executor.py
+│   └── safety.py
 ├── harness_probe/        # CLI + IO 层
 │   ├── cli.py
 │   ├── io.py
@@ -70,6 +78,7 @@ harness-probe/
 | --- | --- |
 | `outputs/prompt_<session>_hat30.md` | 某帽完整 Subagent Prompt |
 | `outputs/task_run_<session>.json` | **L1.5** 任务执行实例图 |
+| `outputs/execution_log_<session>.jsonl` | 执行/拦截事件日志（v0.7+） |
 
 ## 使用 Ink 全量图谱
 

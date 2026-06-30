@@ -129,7 +129,12 @@ class TaskRunner:
             )
             self._last_prompts[hat] = compiled
 
-            evidence_table = self._execute_hat(hat, compiled, max_retries=max_retries)
+            evidence_table = self._execute_hat(
+                hat,
+                compiled,
+                max_retries=max_retries,
+                session_id=run_graph.session_id,
+            )
             run_node.evidence = json.dumps(evidence_table, ensure_ascii=False)
             if any(row["pass_fail"] == "fail" for row in evidence_table):
                 run_node.status = RunNodeStatus.blocked
@@ -151,12 +156,17 @@ class TaskRunner:
         hat: str,
         compiled: CompiledPrompt,
         max_retries: int = 0,
+        session_id: str | None = None,
     ) -> list[dict[str, str]]:
         if self.mock_executor:
             return self._run_with_mock_executor(hat, compiled)
         if self.executor is None:
             return self._mock_subagent_result(hat)
-        return self._run_contracts_with_executor(hat, max_retries=max_retries)
+        return self._run_contracts_with_executor(
+            hat,
+            max_retries=max_retries,
+            session_id=session_id,
+        )
 
     def _run_with_mock_executor(
         self,
@@ -173,14 +183,21 @@ class TaskRunner:
             }
         ]
 
-    def _run_contracts_with_executor(self, hat: str, max_retries: int = 0) -> list[dict[str, str]]:
+    def _run_contracts_with_executor(
+        self,
+        hat: str,
+        max_retries: int = 0,
+        session_id: str | None = None,
+    ) -> list[dict[str, str]]:
         assert self.executor is not None
         rows = []
         for contract in self.task.contracts:
             last_result: ExecutionResult | None = None
             attempts = 0
             while True:
-                result: ExecutionResult = asyncio.run(self.executor.run(contract.verify, cwd=self.cwd))
+                result: ExecutionResult = asyncio.run(
+                    self.executor.run(contract.verify, cwd=self.cwd, session_id=session_id)
+                )
                 last_result = result
                 if result.returncode == 0 or attempts >= max_retries:
                     break
@@ -197,6 +214,9 @@ class TaskRunner:
                     "elapsed_ms": last_result.elapsed_ms,
                     "truncated": last_result.truncated,
                     "timed_out": last_result.timed_out,
+                    "blocked": last_result.blocked,
+                    "dry_run": last_result.dry_run,
+                    "reason": last_result.reason,
                     "retries": attempts,
                 },
                 ensure_ascii=False,
