@@ -1,0 +1,66 @@
+graph_id: "20_runner"
+title: "TaskRunner 多帽执行编排"
+description: "纯逻辑执行器：gate_scan、pre_spawn_verify、run_sequence"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "RUNNER"
+    label: "TaskRunner"
+    kind: service
+  - id: "BUILDER"
+    label: "builder.py"
+    kind: service
+  - id: "COMPILER"
+    label: "compiler.py"
+    kind: service
+  - id: "GRAPH"
+    label: "graph.py"
+    kind: service
+  - id: "EXECUTOR"
+    label: "executor.py"
+    kind: service
+  - id: "MODELS"
+    label: "models.py"
+    kind: data
+
+edges:
+  - from: "RUNNER"
+    to: "BUILDER"
+    label: "build_hat_prompt × hats"
+    anchors:
+      - path: "harness_sdk/runner.py"
+        symbol: "_execute_hat"
+  - from: "RUNNER"
+    to: "COMPILER"
+    label: "retrieve_wiki"
+    anchors:
+      - path: "harness_sdk/runner.py"
+        symbol: "run_sequence"
+  - from: "RUNNER"
+    to: "GRAPH"
+    label: "query_subgraph"
+    anchors:
+      - path: "harness_sdk/runner.py"
+        symbol: "run_sequence"
+  - from: "RUNNER"
+    to: "EXECUTOR"
+    label: "真实执行 verify 命令"
+    anchors:
+      - path: "harness_sdk/runner.py"
+        symbol: "_execute_hat"
+  - from: "BUILDER"
+    to: "COMPILER"
+    label: "format_contract_table / format_wiki_context"
+    anchors:
+      - path: "harness_sdk/builder.py"
+        symbol: "_build_execution_hat_prompt"
+  - from: "COMPILER"
+    to: "MODELS"
+    label: "AcceptanceContract / HumanGate / HarnessTask"
+  - from: "GRAPH"
+    to: "MODELS"
+    label: "TechGraph / GraphNode / GraphEdge / SubgraphResult"
+  - from: "EXECUTOR"
+    to: "MODELS"
+    label: "ExecutionResult"

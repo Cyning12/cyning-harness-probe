@@ -1,0 +1,21 @@
+graph_id: "30_compiler"
+title: "task parser + contract compiler"
+description: "解析 task.md、编译 AcceptanceContract、校验 human_gate、检索 Wiki"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "COMPILER"
+    label: "compiler.py"
+    kind: service
+  - id: "MODELS"
+    label: "models.py"
+    kind: data
+
+edges:
+  - from: "COMPILER"
+    to: "MODELS"
+    label: "AcceptanceContract / HumanGate / HarnessTask / WikiEntry"
+    anchors:
+      - path: "harness_sdk/compiler.py"
+        symbol: "compile_contracts_from_task"

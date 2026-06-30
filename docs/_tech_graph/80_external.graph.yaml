@@ -1,0 +1,23 @@
+graph_id: "80_external"
+title: "外部依赖"
+description: "@cyning/harness 产品包与 Ink 工作区规范"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "CYNING_HARNESS"
+    label: "@cyning/harness"
+    kind: external
+  - id: "WORKSPACE"
+    label: "Ink 工作区"
+    kind: external
+
+edges:
+  - from: "CLI"
+    to: "CYNING_HARNESS"
+    label: "shell out npx verify"
+    type: optional_depends_on
+  - from: "RUNNER"
+    to: "WORKSPACE"
+    label: "pre_spawn_verify / gate_scan 对齐 PROMPT v1.1"
+    type: references

@@ -1,0 +1,30 @@
+graph_id: "70_io"
+title: "CLI IO 与渲染"
+description: "文件读写、wiki 加载、Prompt 渲染输出"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "IO"
+    label: "io.py"
+    kind: service
+  - id: "RENDERING"
+    label: "rendering.py"
+    kind: service
+  - id: "MODELS"
+    label: "models.py"
+    kind: data
+
+edges:
+  - from: "IO"
+    to: "MODELS"
+    label: "load_graph / parse_task_markdown"
+    anchors:
+      - path: "harness_probe/io.py"
+        symbol: "load_graph"
+  - from: "RENDERING"
+    to: "MODELS"
+    label: "print_cache_boundary"
+    anchors:
+      - path: "harness_probe/rendering.py"
+        symbol: "print_cache_boundary"

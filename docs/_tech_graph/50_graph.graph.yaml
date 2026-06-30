@@ -1,0 +1,21 @@
+graph_id: "50_graph"
+title: "L0 图谱加载与子图查询"
+description: "graph_v2 加载、BFS 裁剪、Mermaid 生成"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "GRAPH"
+    label: "graph.py"
+    kind: service
+  - id: "MODELS"
+    label: "models.py"
+    kind: data
+
+edges:
+  - from: "GRAPH"
+    to: "MODELS"
+    label: "TechGraph / GraphNode / GraphEdge / SubgraphResult"
+    anchors:
+      - path: "harness_sdk/graph.py"
+        symbol: "query_subgraph"

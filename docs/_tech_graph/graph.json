@@ -1,30 +1,299 @@
 {
   "schema_version": "graph_v2",
-  "freeze_id": "HARNESS-PROBE-GRAPH-V1",
-  "generated_at": "2026-06-29T00:00:00Z",
+  "freeze_id": "HARNESS-PROBE-GRAPH-V2",
+  "generated_at": "2026-06-30T07:21:06.456804+00:00",
   "nodes": [
-    {"id": "CLI", "label": "probe CLI", "kind": "entry", "module_id": "CLI", "graph_id": "probe"},
-    {"id": "ORCHESTRATOR", "label": "HarnessProbeCore", "kind": "service", "module_id": "ORCHESTRATOR", "graph_id": "probe"},
-    {"id": "COMPILER", "label": "compiler.py", "kind": "service", "module_id": "COMPILER", "graph_id": "probe"},
-    {"id": "BUILDER", "label": "builder.py", "kind": "service", "module_id": "BUILDER", "graph_id": "probe"},
-    {"id": "GRAPH_LOADER", "label": "graph_loader.py", "kind": "service", "module_id": "GRAPH_LOADER", "graph_id": "probe"},
-    {"id": "MODELS", "label": "models.py", "kind": "data", "module_id": "MODELS", "graph_id": "probe"},
-    {"id": "CYNING_HARNESS", "label": "@cyning/harness", "kind": "external", "module_id": "CYNING_HARNESS", "graph_id": "probe"},
-    {"id": "WORKSPACE", "label": "Ink 工作区", "kind": "external", "module_id": "WORKSPACE", "graph_id": "probe"}
+    {
+      "id": "CLI",
+      "label": "probe CLI",
+      "kind": "entry",
+      "module_id": "CLI",
+      "graph_id": "probe"
+    },
+    {
+      "id": "RUNNER",
+      "label": "TaskRunner",
+      "kind": "service",
+      "module_id": "RUNNER",
+      "graph_id": "probe"
+    },
+    {
+      "id": "COMPILER",
+      "label": "compiler.py",
+      "kind": "service",
+      "module_id": "COMPILER",
+      "graph_id": "probe"
+    },
+    {
+      "id": "GRAPH",
+      "label": "graph.py",
+      "kind": "service",
+      "module_id": "GRAPH",
+      "graph_id": "probe"
+    },
+    {
+      "id": "IO",
+      "label": "io.py",
+      "kind": "service",
+      "module_id": "IO",
+      "graph_id": "probe"
+    },
+    {
+      "id": "BUILDER",
+      "label": "builder.py",
+      "kind": "service",
+      "module_id": "BUILDER",
+      "graph_id": "probe"
+    },
+    {
+      "id": "EXECUTOR",
+      "label": "executor.py",
+      "kind": "service",
+      "module_id": "EXECUTOR",
+      "graph_id": "probe"
+    },
+    {
+      "id": "MODELS",
+      "label": "models.py",
+      "kind": "data",
+      "module_id": "MODELS",
+      "graph_id": "probe"
+    },
+    {
+      "id": "RENDERING",
+      "label": "rendering.py",
+      "kind": "service",
+      "module_id": "RENDERING",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CYNING_HARNESS",
+      "label": "@cyning/harness",
+      "kind": "external",
+      "module_id": "CYNING_HARNESS",
+      "graph_id": "probe"
+    },
+    {
+      "id": "WORKSPACE",
+      "label": "Ink 工作区",
+      "kind": "external",
+      "module_id": "WORKSPACE",
+      "graph_id": "probe"
+    }
   ],
   "edges": [
-    {"from": "CLI", "to": "ORCHESTRATOR", "mark": "->", "type": "depends_on", "label": "cmd_run → HarnessProbeCore.run_task", "graph_id": "probe"},
-    {"from": "CLI", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "cmd_verify → validate_task_markdown", "graph_id": "probe"},
-    {"from": "CLI", "to": "GRAPH_LOADER", "mark": "->", "type": "depends_on", "label": "cmd_graph_query / cmd_watch", "graph_id": "probe"},
-    {"from": "ORCHESTRATOR", "to": "BUILDER", "mark": "->", "type": "depends_on", "label": "run_task → build_hat_prompt", "graph_id": "probe"},
-    {"from": "ORCHESTRATOR", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "retrieve_wiki", "graph_id": "probe"},
-    {"from": "ORCHESTRATOR", "to": "GRAPH_LOADER", "mark": "->", "type": "depends_on", "label": "load_graph / query_subgraph", "graph_id": "probe"},
-    {"from": "BUILDER", "to": "COMPILER", "mark": "->", "type": "depends_on", "label": "format_contract_table", "graph_id": "probe"},
-    {"from": "COMPILER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "HarnessTask / AcceptanceContract", "graph_id": "probe"},
-    {"from": "GRAPH_LOADER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "TechGraph / SubgraphResult", "graph_id": "probe"},
-    {"from": "ORCHESTRATOR", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "TaskRunGraph / BlockedError", "graph_id": "probe"},
-    {"from": "BUILDER", "to": "MODELS", "mark": "->", "type": "depends_on", "label": "CompiledPrompt", "graph_id": "probe"},
-    {"from": "CLI", "to": "CYNING_HARNESS", "mark": "..>", "type": "optional_depends_on", "label": "verify 可 shell out npx harness", "graph_id": "probe"},
-    {"from": "CLI", "to": "WORKSPACE", "mark": "..>", "type": "references", "label": "link PROMPT_cursor_task_chain_serial_v1.md", "graph_id": "probe"}
+    {
+      "from": "CLI",
+      "to": "RUNNER",
+      "mark": "cmd_run/run_sequence",
+      "type": "depends_on",
+      "label": "cmd_run/run_sequence",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_run"
+        }
+      ]
+    },
+    {
+      "from": "CLI",
+      "to": "COMPILER",
+      "mark": "cmd_verify",
+      "type": "depends_on",
+      "label": "cmd_verify",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_verify"
+        }
+      ]
+    },
+    {
+      "from": "CLI",
+      "to": "GRAPH",
+      "mark": "cmd_graph_query / cmd_watch",
+      "type": "depends_on",
+      "label": "cmd_graph_query / cmd_watch",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_graph_query"
+        }
+      ]
+    },
+    {
+      "from": "CLI",
+      "to": "IO",
+      "mark": "load_graph / parse_task_markdown",
+      "type": "depends_on",
+      "label": "load_graph / parse_task_markdown",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_compile"
+        }
+      ]
+    },
+    {
+      "from": "RUNNER",
+      "to": "BUILDER",
+      "mark": "build_hat_prompt × hats",
+      "type": "depends_on",
+      "label": "build_hat_prompt × hats",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/runner.py",
+          "symbol": "_execute_hat"
+        }
+      ]
+    },
+    {
+      "from": "RUNNER",
+      "to": "COMPILER",
+      "mark": "retrieve_wiki",
+      "type": "depends_on",
+      "label": "retrieve_wiki",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/runner.py",
+          "symbol": "run_sequence"
+        }
+      ]
+    },
+    {
+      "from": "RUNNER",
+      "to": "GRAPH",
+      "mark": "query_subgraph",
+      "type": "depends_on",
+      "label": "query_subgraph",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/runner.py",
+          "symbol": "run_sequence"
+        }
+      ]
+    },
+    {
+      "from": "RUNNER",
+      "to": "EXECUTOR",
+      "mark": "真实执行 verify 命令",
+      "type": "depends_on",
+      "label": "真实执行 verify 命令",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/runner.py",
+          "symbol": "_execute_hat"
+        }
+      ]
+    },
+    {
+      "from": "BUILDER",
+      "to": "COMPILER",
+      "mark": "format_contract_table / format_wiki_context",
+      "type": "depends_on",
+      "label": "format_contract_table / format_wiki_context",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/builder.py",
+          "symbol": "_build_execution_hat_prompt"
+        }
+      ]
+    },
+    {
+      "from": "COMPILER",
+      "to": "MODELS",
+      "mark": "AcceptanceContract / HumanGate / HarnessTask",
+      "type": "depends_on",
+      "label": "AcceptanceContract / HumanGate / HarnessTask",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "GRAPH",
+      "to": "MODELS",
+      "mark": "TechGraph / GraphNode / GraphEdge / SubgraphResult",
+      "type": "depends_on",
+      "label": "TechGraph / GraphNode / GraphEdge / SubgraphResult",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "EXECUTOR",
+      "to": "MODELS",
+      "mark": "ExecutionResult",
+      "type": "depends_on",
+      "label": "ExecutionResult",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "COMPILER",
+      "to": "MODELS",
+      "mark": "AcceptanceContract / HumanGate / HarnessTask / WikiEntry",
+      "type": "depends_on",
+      "label": "AcceptanceContract / HumanGate / HarnessTask / WikiEntry",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/compiler.py",
+          "symbol": "compile_contracts_from_task"
+        }
+      ]
+    },
+    {
+      "from": "IO",
+      "to": "MODELS",
+      "mark": "load_graph / parse_task_markdown",
+      "type": "depends_on",
+      "label": "load_graph / parse_task_markdown",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/io.py",
+          "symbol": "load_graph"
+        }
+      ]
+    },
+    {
+      "from": "RENDERING",
+      "to": "MODELS",
+      "mark": "print_cache_boundary",
+      "type": "depends_on",
+      "label": "print_cache_boundary",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/rendering.py",
+          "symbol": "print_cache_boundary"
+        }
+      ]
+    },
+    {
+      "from": "CLI",
+      "to": "CYNING_HARNESS",
+      "mark": "shell out npx verify",
+      "type": "optional_depends_on",
+      "label": "shell out npx verify",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "RUNNER",
+      "to": "WORKSPACE",
+      "mark": "pre_spawn_verify / gate_scan 对齐 PROMPT v1.1",
+      "type": "references",
+      "label": "pre_spawn_verify / gate_scan 对齐 PROMPT v1.1",
+      "graph_id": "probe",
+      "anchors": []
+    }
   ]
 }

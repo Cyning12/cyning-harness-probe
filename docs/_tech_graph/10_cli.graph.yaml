@@ -1,0 +1,48 @@
+graph_id: "10_cli"
+title: "probe CLI 入口"
+description: "argparse 命令分发与参数解析"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "CLI"
+    label: "probe CLI"
+    kind: entry
+  - id: "RUNNER"
+    label: "TaskRunner"
+    kind: service
+  - id: "COMPILER"
+    label: "compiler.py"
+    kind: service
+  - id: "GRAPH"
+    label: "graph.py"
+    kind: service
+  - id: "IO"
+    label: "io.py"
+    kind: service
+
+edges:
+  - from: "CLI"
+    to: "RUNNER"
+    label: "cmd_run/run_sequence"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_run"
+  - from: "CLI"
+    to: "COMPILER"
+    label: "cmd_verify"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_verify"
+  - from: "CLI"
+    to: "GRAPH"
+    label: "cmd_graph_query / cmd_watch"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_graph_query"
+  - from: "CLI"
+    to: "IO"
+    label: "load_graph / parse_task_markdown"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_compile"

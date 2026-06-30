@@ -1,0 +1,12 @@
+graph_id: "60_models"
+title: "Pydantic 数据模型"
+description: "L0 / L1 / L1.5 / L2 全层数据类"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "MODELS"
+    label: "models.py"
+    kind: data
+
+edges: []
