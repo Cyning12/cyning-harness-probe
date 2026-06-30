@@ -17,8 +17,8 @@
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
 | HG-TASK-DRAFT | `approved` | 30 | 任务单已定稿 |
-| HG-AUDIT-R1 | `in_progress` | 30 | 功能版 R1 审计中 |
-| HG-EXEC-AUTH | `pending` | 30 | 待审计通过后授权 30 改码 |
+| HG-AUDIT-R1 | `approved` | 30 | R1 审计通过：8.1+8.2 范围清晰，验收标准可测，失败路径完整 |
+| HG-EXEC-AUTH | `approved` | 30 | 已授权 30 改码，可派工执行 |
 
 ## 背景与目标
 
