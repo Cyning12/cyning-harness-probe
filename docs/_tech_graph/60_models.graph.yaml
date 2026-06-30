@@ -1,12 +1,42 @@
 graph_id: "60_models"
 title: "Pydantic 数据模型"
-description: "L0 / L1 / L1.5 / L2 全层数据类"
+description: "核心数据结构定义：task、contract、graph、run、prompt、execution"
 version: "2026-06-30"
-direction: "TD"
+direction: "TB"
 
 nodes:
-  - id: "MODELS"
-    label: "models.py"
+  - id: "HarnessTask"
+    label: "HarnessTask"
+    kind: data
+  - id: "AcceptanceContract"
+    label: "AcceptanceContract"
+    kind: data
+  - id: "HumanGate"
+    label: "HumanGate"
+    kind: data
+  - id: "TechGraph"
+    label: "TechGraph"
+    kind: data
+  - id: "TaskRunGraph"
+    label: "TaskRunGraph"
+    kind: data
+  - id: "ExecutionResult"
+    label: "ExecutionResult"
     kind: data
 
-edges: []
+edges:
+  - from: "HarnessTask"
+    to: "AcceptanceContract"
+    label: "contracts[]"
+  - from: "HarnessTask"
+    to: "HumanGate"
+    label: "human_gates[]"
+  - from: "TechGraph"
+    to: "HarnessTask"
+    label: "freeze_id 校验"
+  - from: "TaskRunGraph"
+    to: "HarnessTask"
+    label: "task_path / l0_freeze_id"
+  - from: "ExecutionResult"
+    to: "TaskRunGraph"
+    label: "evidence"

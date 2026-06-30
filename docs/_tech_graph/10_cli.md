@@ -20,7 +20,7 @@ flowchart TD
     COMPILER[["compiler.py"]]
     GRAPH[["graph.py"]]
     IO[["io.py"]]
-    CLI --"cmd_run/run_sequence"--> RUNNER
+    CLI --"cmd_run / run_sequence"--> RUNNER
     CLI --"cmd_verify"--> COMPILER
     CLI --"cmd_graph_query / cmd_watch"--> GRAPH
     CLI --"load_graph / parse_task_markdown"--> IO
@@ -41,7 +41,7 @@ flowchart TD
 
 | From | To | Label | Type |
 |------|----|-------|------|
-| CLI | RUNNER | cmd_run/run_sequence |  |
+| CLI | RUNNER | cmd_run / run_sequence |  |
 | CLI | COMPILER | cmd_verify |  |
 | CLI | GRAPH | cmd_graph_query / cmd_watch |  |
 | CLI | IO | load_graph / parse_task_markdown |  |

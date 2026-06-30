@@ -1,6 +1,6 @@
 graph_id: "70_io"
-title: "CLI IO 与渲染"
-description: "文件读写、wiki 加载、Prompt 渲染输出"
+title: "文件 IO 与渲染"
+description: "graph/task/wiki 加载、Prompt 持久化、task_run JSON 落盘"
 version: "2026-06-30"
 direction: "TD"
 
@@ -11,20 +11,32 @@ nodes:
   - id: "RENDERING"
     label: "rendering.py"
     kind: service
-  - id: "MODELS"
-    label: "models.py"
-    kind: data
+  - id: "GRAPH_JSON"
+    label: "docs/_tech_graph/graph.json"
+    kind: storage
+  - id: "TASK_MD"
+    label: "docs/harness/tasks/active/*.md"
+    kind: storage
+  - id: "WIKI_JSON"
+    label: "data/wiki/*.json"
+    kind: storage
+  - id: "OUTPUTS"
+    label: "outputs/"
+    kind: storage
 
 edges:
   - from: "IO"
-    to: "MODELS"
-    label: "load_graph / parse_task_markdown"
-    anchors:
-      - path: "harness_probe/io.py"
-        symbol: "load_graph"
-  - from: "RENDERING"
-    to: "MODELS"
+    to: "GRAPH_JSON"
+    label: "load_graph"
+  - from: "IO"
+    to: "TASK_MD"
+    label: "parse_task_markdown / validate_task_markdown"
+  - from: "IO"
+    to: "WIKI_JSON"
+    label: "load_wiki_stub"
+  - from: "IO"
+    to: "OUTPUTS"
+    label: "persist_prompt / persist_run_graph"
+  - from: "IO"
+    to: "RENDERING"
     label: "print_cache_boundary"
-    anchors:
-      - path: "harness_probe/rendering.py"
-        symbol: "print_cache_boundary"

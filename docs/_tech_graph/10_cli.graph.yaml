@@ -24,7 +24,7 @@ nodes:
 edges:
   - from: "CLI"
     to: "RUNNER"
-    label: "cmd_run/run_sequence"
+    label: "cmd_run / run_sequence"
     anchors:
       - path: "harness_probe/cli.py"
         symbol: "cmd_run"

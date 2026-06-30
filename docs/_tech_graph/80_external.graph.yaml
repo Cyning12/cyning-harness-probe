@@ -1,23 +1,33 @@
 graph_id: "80_external"
 title: "外部依赖"
-description: "@cyning/harness 产品包与 Ink 工作区规范"
+description: "@cyning/harness 产品包、Ink 工作区、MCP Host"
 version: "2026-06-30"
 direction: "TD"
 
 nodes:
-  - id: "CYNING_HARNESS"
+  - id: "HARNESS_PKG"
     label: "@cyning/harness"
     kind: external
-  - id: "WORKSPACE"
+  - id: "INK_WORKSPACE"
     label: "Ink 工作区"
     kind: external
+  - id: "MCP_HOST"
+    label: "MCP Host"
+    kind: external
+  - id: "CLI"
+    label: "probe CLI"
+    kind: entry
+  - id: "MCP"
+    label: "MCP Server"
+    kind: entry
 
 edges:
-  - from: "CLI"
-    to: "CYNING_HARNESS"
-    label: "shell out npx verify"
-    type: optional_depends_on
-  - from: "RUNNER"
-    to: "WORKSPACE"
-    label: "pre_spawn_verify / gate_scan 对齐 PROMPT v1.1"
-    type: references
+  - from: "HARNESS_PKG"
+    to: "CLI"
+    label: "npx @cyning/harness verify"
+  - from: "INK_WORKSPACE"
+    to: "CLI"
+    label: "共享 graph.json / task 规范"
+  - from: "MCP_HOST"
+    to: "MCP"
+    label: "stdio / sse transport"

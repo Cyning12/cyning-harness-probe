@@ -1,0 +1,48 @@
+graph_id: "02_version"
+title: "版本迭代时间线"
+description: "harness-probe v0.1 至 v0.7 的关键能力演进"
+version: "2026-06-30"
+direction: "LR"
+
+nodes:
+  - id: "v01"
+    label: "v0.1 · 初版 CLI"
+    kind: milestone
+  - id: "v02"
+    label: "v0.2 · PRE_SPAWN_VERIFY"
+    kind: milestone
+  - id: "v03"
+    label: "v0.3 · 全帽链"
+    kind: milestone
+  - id: "v04"
+    label: "v0.4 · SDK 重构"
+    kind: milestone
+  - id: "v05"
+    label: "v0.5 · MCP Server"
+    kind: milestone
+  - id: "v06"
+    label: "v0.6 · 真实执行器"
+    kind: milestone
+  - id: "v07"
+    label: "v0.7 · 安全执行器"
+    kind: milestone
+
+edges:
+  - from: "v01"
+    to: "v02"
+    label: "+>"
+  - from: "v02"
+    to: "v03"
+    label: "+>"
+  - from: "v03"
+    to: "v04"
+    label: "+>"
+  - from: "v04"
+    to: "v05"
+    label: "+>"
+  - from: "v05"
+    to: "v06"
+    label: "+>"
+  - from: "v06"
+    to: "v07"
+    label: "+>"
