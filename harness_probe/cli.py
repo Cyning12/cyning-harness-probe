@@ -21,6 +21,7 @@ from harness_probe.rendering import print_cache_boundary
 from harness_sdk import TaskRunner
 from harness_sdk.executor import SubprocessExecutor
 from harness_sdk.graph import query_subgraph
+from harness_sdk.safety import SafetyConfig
 
 
 def _repo_root() -> Path:
@@ -168,10 +169,18 @@ def cmd_run(args: argparse.Namespace) -> int:
             if not elp.is_absolute():
                 elp = _repo_root() / elp
             execution_log_dir = str(elp)
+        from harness_sdk.safety import load_safety_config
+
+        safety_config = SafetyConfig()
+        if args.safety_config:
+            safety_config = load_safety_config(args.safety_config)
+        elif safety_cfg.get("config"):
+            safety_config = load_safety_config(safety_cfg["config"])
         executor = SubprocessExecutor(
             safety_mode=safety_mode,
             dry_run=args.dry_run,
             execution_log_dir=execution_log_dir,
+            safety_config=safety_config,
         )
 
     cwd = None
@@ -305,6 +314,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--execution-log-dir",
         default=None,
         help="执行/拦截事件日志目录，默认不写入",
+    )
+    p_run.add_argument(
+        "--safety-config",
+        default=None,
+        help="安全策略 YAML 路径，与默认配置合并",
     )
     p_run.set_defaults(func=cmd_run)
 

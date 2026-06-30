@@ -112,6 +112,7 @@ async def probe_run(
     safety_mode: str = "whitelist",
     execution_log_dir: str | None = None,
     config_path: str | None = None,
+    safety_config: str | None = None,
 ) -> str:
     """串行模拟执行多顶帽子，生成 L1.5 task_run 轨迹。"""
     config = _resolve_config(config_path)
@@ -136,10 +137,18 @@ async def probe_run(
             if not rlp.is_absolute():
                 rlp = _repo_root() / rlp
             resolved_log_dir = str(rlp)
+        from harness_sdk.safety import load_safety_config
+
+        safety_cfg_obj = None
+        if safety_config:
+            safety_cfg_obj = load_safety_config(safety_config)
+        elif safety_cfg.get("config"):
+            safety_cfg_obj = load_safety_config(safety_cfg["config"])
         real_executor = SubprocessExecutor(
             safety_mode=resolved_safety_mode,
             dry_run=dry_run,
             execution_log_dir=resolved_log_dir,
+            safety_config=safety_cfg_obj,
         )
 
     if cwd:

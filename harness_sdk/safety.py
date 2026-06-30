@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 
 
 class SafetyMode(str, Enum):
@@ -13,6 +15,10 @@ class SafetyMode(str, Enum):
     whitelist = "whitelist"
     audit = "audit"
     unsafe = "unsafe"
+
+
+class SafetyConfigError(Exception):
+    """安全策略配置错误。"""
 
 
 @dataclass
@@ -91,6 +97,74 @@ DEFAULT_DANGEROUS_PREFIXES: list[str] = [
 ]
 
 
+def load_safety_config(path: str | Path) -> SafetyConfig:
+    """从 YAML 文件加载安全策略配置。
+
+    合并规则：
+    - allowed_commands：项目配置追加到默认列表
+    - dangerous_metacharacters / dangerous_prefixes：项目配置追加到默认列表
+    - 危险前缀不可被删除或覆盖；如果项目配置尝试覆盖，打印警告并忽略
+    """
+    config_path = Path(path)
+    if not config_path.exists():
+        warnings.warn(f"safety_config_not_found: {config_path}", stacklevel=2)
+        return SafetyConfig()
+
+    import yaml
+
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise SafetyConfigError(f"invalid_safety_yaml: {exc}") from exc
+
+    if not isinstance(raw, dict):
+        raise SafetyConfigError("safety_yaml_root_must_be_mapping")
+
+    mode = raw.get("mode", "whitelist")
+    try:
+        mode = SafetyMode(mode)
+    except ValueError as exc:
+        raise SafetyConfigError(f"invalid_safety_mode: {mode}") from exc
+
+    allowed_commands = list(DEFAULT_ALLOWED_COMMANDS)
+    dangerous_metacharacters = list(DEFAULT_DANGEROUS_METACHARACTERS)
+    dangerous_prefixes = list(DEFAULT_DANGEROUS_PREFIXES)
+
+    user_allowed = raw.get("allowed_commands", [])
+    if user_allowed:
+        allowed_commands.extend([str(c) for c in user_allowed])
+
+    user_meta = raw.get("dangerous_metacharacters", [])
+    if user_meta:
+        dangerous_metacharacters.extend([str(c) for c in user_meta])
+
+    user_prefixes = raw.get("dangerous_prefixes", [])
+    if user_prefixes:
+        for prefix in user_prefixes:
+            prefix = str(prefix)
+            if prefix.lower() in {p.lower() for p in DEFAULT_DANGEROUS_PREFIXES}:
+                warnings.warn(
+                    f"dangerous_prefix_override_ignored: {prefix!r} cannot override defaults",
+                    stacklevel=2,
+                )
+                continue
+            dangerous_prefixes.append(prefix)
+
+    max_command_length = raw.get("max_command_length", 1024)
+    if not isinstance(max_command_length, int) or max_command_length <= 0:
+        raise SafetyConfigError("max_command_length_must_be_positive_int")
+
+    return SafetyConfig(
+        mode=mode,
+        allowed_commands=allowed_commands,
+        dangerous_metacharacters=dangerous_metacharacters,
+        dangerous_prefixes=dangerous_prefixes,
+        max_command_length=max_command_length,
+        unsafe_env_name=str(raw.get("unsafe_env_name", "HARNESS_UNSAFE")),
+        unsafe_env_value=str(raw.get("unsafe_env_value", "1")),
+    )
+
+
 class CommandSafetyChecker:
     """基于白名单 + 黑名单的简单命令安全校验器。
 
@@ -122,20 +196,32 @@ class CommandSafetyChecker:
 
     def _check_violations(self, cmd: str) -> str | None:
         if len(cmd) > self.config.max_command_length:
-            return f"command_too_long: {len(cmd)} > {self.config.max_command_length}"
+            return (
+                f"command_too_long: {len(cmd)} > {self.config.max_command_length}. "
+                "Shorten the command or increase max_command_length in config/safety.yaml"
+            )
 
         for token in self.config.dangerous_metacharacters:
             if token in cmd:
-                return f"dangerous_metacharacter: {token!r}"
+                return (
+                    f"dangerous_metacharacter: {token!r}. "
+                    "Remove shell metacharacters or use --safety-mode audit"
+                )
 
         stripped = cmd.lstrip()
         lowered = stripped.lower()
         for prefix in self.config.dangerous_prefixes:
             if lowered.startswith(prefix.lower()):
-                return f"dangerous_command_prefix: {prefix!r}"
+                return (
+                    f"dangerous_command_prefix: {prefix!r}. "
+                    "Use a safer command or set HARNESS_UNSAFE=1 with --safety-mode unsafe"
+                )
 
         if self.config.mode == SafetyMode.whitelist:
             if not any(stripped.startswith(allowed) for allowed in self.config.allowed_commands):
-                return "not_in_whitelist"
+                return (
+                    "not_in_whitelist. "
+                    "To allow this command, update config/safety.yaml or use --safety-mode audit"
+                )
 
         return None

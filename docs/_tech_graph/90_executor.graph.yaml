@@ -21,13 +21,32 @@ nodes:
     label: "ExecutionResult"
     kind: data
 
+  - id: "SAFETY_YAML"
+    label: "config/safety.yaml"
+    kind: storage
+  - id: "CLI_ARGS"
+    label: "--safety-config / --safety-mode"
+    kind: input
+
 edges:
+  - from: "CLI_ARGS"
+    to: "EXECUTOR"
+    label: "传入安全参数"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_run"
   - from: "EXECUTOR"
     to: "SAFETY"
     label: "check(cmd)"
     anchors:
       - path: "harness_sdk/executor.py"
         symbol: "run"
+  - from: "SAFETY_YAML"
+    to: "SAFETY_CONFIG"
+    label: "load_safety_config"
+    anchors:
+      - path: "harness_sdk/safety.py"
+        symbol: "load_safety_config"
   - from: "SAFETY"
     to: "SAFETY_CONFIG"
     label: "配置模式/白名单/黑名单"

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.1 · 2026-06-30
+
+### Added
+
+- **安全策略配置**：`harness_sdk/safety.py` 新增 `load_safety_config` / `SafetyConfigError`。
+  - 支持从 `config/safety.yaml` 加载自定义白名单与黑名单。
+  - 项目白名单追加到默认白名单，危险前缀黑名单追加到默认黑名单。
+  - 危险命令前缀（如 `rm`）被覆盖时发出 `UserWarning`。
+- **CLI 安全参数**：`harness_probe/cli.py` 新增 `--safety-config`。
+- **MCP 安全参数**：`harness_mcp/tools.py` 的 `probe_run` 新增 `safety_config` / `safety_mode`。
+- **事件循环兼容**：`TaskRunner._run_executor` 在已有事件循环环境中通过后台线程运行 executor。
+- **Wiki 加载容错**：`load_wiki_stub` 在文件缺失时返回空列表。
+
 ## v0.7 · 2026-06-30
 
 ### Added

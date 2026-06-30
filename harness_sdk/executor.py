@@ -38,6 +38,7 @@ class SubprocessExecutor:
         safety_mode: str | SafetyMode = SafetyMode.whitelist,
         dry_run: bool = False,
         execution_log_dir: str | Path | None = None,
+        safety_config: SafetyConfig | None = None,
     ):
         self.timeout = timeout
         self.max_stdout = max_stdout
@@ -46,7 +47,11 @@ class SubprocessExecutor:
         self.safety_mode = safety_mode
         self.dry_run = dry_run
         self.execution_log_dir = Path(execution_log_dir) if execution_log_dir else None
-        self._checker = CommandSafetyChecker(SafetyConfig(mode=safety_mode))
+        if safety_config is None:
+            safety_config = SafetyConfig(mode=safety_mode)
+        else:
+            safety_config.mode = safety_mode
+        self._checker = CommandSafetyChecker(safety_config)
 
     async def run(
         self,

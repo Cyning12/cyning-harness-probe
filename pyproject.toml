@@ -1,6 +1,6 @@
 [project]
 name = "harness-probe"
-version = "0.7.0"
+version = "0.7.1"
 description = "Harness Probe · L0/L1/L1.5/L2 编译探针"
 readme = "README.md"
 license = {text = "MIT"}
@@ -26,3 +26,10 @@ build-backend = "hatchling.build"
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
