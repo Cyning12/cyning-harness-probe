@@ -1,7 +1,7 @@
 {
   "schema_version": "graph_v2",
   "freeze_id": "HARNESS-PROBE-GRAPH-V2",
-  "generated_at": "2026-06-30T11:52:49.063754+00:00",
+  "generated_at": "2026-06-30T13:24:13.794830+00:00",
   "nodes": [
     {
       "id": "CLI",
@@ -281,6 +281,20 @@
       "label": "execution_log_*.jsonl",
       "kind": "storage",
       "module_id": "EXECUTION_LOG",
+      "graph_id": "probe"
+    },
+    {
+      "id": "SAFETY_YAML",
+      "label": "config/safety.yaml",
+      "kind": "storage",
+      "module_id": "SAFETY_YAML",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CLI_ARGS",
+      "label": "--safety-config / --safety-mode",
+      "kind": "input",
+      "module_id": "CLI_ARGS",
       "graph_id": "probe"
     }
   ],
@@ -799,6 +813,20 @@
       ]
     },
     {
+      "from": "CLI_ARGS",
+      "to": "EXECUTOR",
+      "mark": "传入安全参数",
+      "type": "depends_on",
+      "label": "传入安全参数",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_run"
+        }
+      ]
+    },
+    {
       "from": "EXECUTOR",
       "to": "SAFETY",
       "mark": "check(cmd)",
@@ -809,6 +837,20 @@
         {
           "path": "harness_sdk/executor.py",
           "symbol": "run"
+        }
+      ]
+    },
+    {
+      "from": "SAFETY_YAML",
+      "to": "SAFETY_CONFIG",
+      "mark": "load_safety_config",
+      "type": "depends_on",
+      "label": "load_safety_config",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/safety.py",
+          "symbol": "load_safety_config"
         }
       ]
     },

@@ -1,0 +1,33 @@
+# Harness Probe 安全策略配置示例（v0.7.1）
+#
+# 加载方式：
+#   python -m harness_probe.cli run \
+#     --executor real \
+#     --safety-config config/safety.yaml \
+#     --from-hat 30 --to-hat 40 \
+#     --task <task.md>
+#
+# 合并规则：
+# - allowed_commands：追加到默认白名单
+# - dangerous_metacharacters / dangerous_prefixes：追加到默认黑名单
+# - 危险前缀（rm/sudo/curl 等）不可被覆盖；尝试覆盖会触发 UserWarning
+
+mode: whitelist
+
+# 扩展默认白名单（前缀匹配）
+allowed_commands:
+  - echo
+  - pytest
+  - python -m pytest
+  - python -m harness_probe.cli
+  # 添加自定义项目命令（去掉注释并修改）：
+  # - my-custom-build
+
+# 扩展危险 shell 元字符黑名单（默认列表不可覆盖，此处仅追加）
+dangerous_metacharacters: []
+
+# 扩展危险命令前缀黑名单（默认列表不可覆盖）
+dangerous_prefixes: []
+
+# 单条命令最大长度（字符）
+max_command_length: 1024

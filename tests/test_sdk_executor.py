@@ -52,7 +52,8 @@ async def test_subprocess_executor_exit_1():
 
 
 @pytest.mark.asyncio
-async def test_subprocess_executor_timeout():
+async def test_subprocess_executor_timeout(monkeypatch):
+    monkeypatch.setenv("HARNESS_UNSAFE", "1")
     executor = SubprocessExecutor(timeout=0.1, safety_mode="unsafe")
     result = await executor.run("sleep 2")
     assert result.returncode == -1
@@ -61,7 +62,8 @@ async def test_subprocess_executor_timeout():
 
 
 @pytest.mark.asyncio
-async def test_subprocess_executor_stdout_truncation():
+async def test_subprocess_executor_stdout_truncation(monkeypatch):
+    monkeypatch.setenv("HARNESS_UNSAFE", "1")
     executor = SubprocessExecutor(max_stdout=10, safety_mode="unsafe")
     result = await executor.run("python -c \"print('A' * 100)\"")
     assert result.truncated
@@ -110,8 +112,9 @@ def test_runner_subprocess_executor_real_verify():
     assert json.loads(f1_evidence[0]["evidence"])["stdout"].strip() == "ok"
 
 
-def test_runner_subprocess_executor_real_verify_fail_blocks():
+def test_runner_subprocess_executor_real_verify_fail_blocks(monkeypatch):
     """TaskRunner 真实执行失败时标记 blocked。"""
+    monkeypatch.setenv("HARNESS_UNSAFE", "1")
     graph, task, wiki = _sample_task_and_deps()
     task = _task_with_contracts(
         [

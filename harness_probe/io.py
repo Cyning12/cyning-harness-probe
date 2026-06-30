@@ -49,7 +49,10 @@ def validate_task_markdown(path: str | Path) -> list[str]:
 
 
 def load_wiki_stub(path: str | Path) -> list[WikiEntry]:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    p = Path(path)
+    if not p.exists():
+        return []
+    raw = json.loads(p.read_text(encoding="utf-8"))
     return [WikiEntry.model_validate(item) for item in raw]
 
 

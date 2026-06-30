@@ -195,8 +195,8 @@ class TaskRunner:
             last_result: ExecutionResult | None = None
             attempts = 0
             while True:
-                result: ExecutionResult = asyncio.run(
-                    self.executor.run(contract.verify, cwd=self.cwd, session_id=session_id)
+                result: ExecutionResult = self._run_executor(
+                    contract.verify, session_id=session_id
                 )
                 last_result = result
                 if result.returncode == 0 or attempts >= max_retries:
@@ -229,6 +229,25 @@ class TaskRunner:
                 }
             )
         return rows
+
+    def _run_executor(
+        self,
+        cmd: str,
+        session_id: str | None = None,
+    ) -> ExecutionResult:
+        """在同步上下文中运行异步 executor.run。"""
+        assert self.executor is not None
+        coro = self.executor.run(cmd, cwd=self.cwd, session_id=session_id)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        # 已有事件循环时，在新线程中运行以避免嵌套 asyncio.run
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
 
     def _mock_subagent_result(self, hat: str) -> list[dict[str, str]]:
         rows = []
