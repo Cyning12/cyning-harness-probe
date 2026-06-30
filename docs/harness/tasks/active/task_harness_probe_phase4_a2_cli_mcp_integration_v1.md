@@ -1,6 +1,6 @@
 # Task · harness-probe v0.6-a2 · CLI/MCP 集成与发布
 
-> **状态**：`draft` · 待 v0.6-a1 完成后进入 20-task-audit  
+> **状态**：`approved_for_audit` · HG-TASK-DRAFT approved · HG-AUDIT-R1 approved  
 > **task_slug**：`harness-probe-phase4-a2-cli-mcp-integration-v1`  
 > **父 Epic**：[`docs/harness/tasks/active/task_harness_probe_phase4_real_verify_runner_v1.md`](./task_harness_probe_phase4_real_verify_runner_v1.md)  
 > **方案真值**：[`docs/PLAN_PHASE4_v1_zh.md`](../../PLAN_PHASE4_v1_zh.md)  
@@ -27,10 +27,10 @@
 
 ### 人工闸 `human_gate`
 
-| human_gate_id | status | blocks_hats | 说明 |
+|| human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
-| HG-TASK-DRAFT | `pending` | 20-task-audit R1, 30 | 待 00 签 |
-| HG-AUDIT-R1 | `pending` | 30 | 20-task-audit R1 通过 · 人签 |
+|| HG-TASK-DRAFT | **`approved`** | 20-task-audit R1, 30 | 00 签 · v0.6-a1 已合并 |
+|| HG-AUDIT-R1 | **`approved`** | 30 | 20-task-audit R1 通过 · 人签 · v0.6-a1 已合并 |
 
 ---
 

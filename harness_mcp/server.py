@@ -55,6 +55,9 @@ def create_server(config_path: str | None = None) -> FastMCP:
         graph_path: str | None = None,
         wiki_path: str | None = None,
         mock: bool = True,
+        executor: str = "mock",
+        max_retries: int = 0,
+        cwd: str | None = None,
     ) -> str:
         return await probe_run(
             task_path=task_path,
@@ -64,6 +67,9 @@ def create_server(config_path: str | None = None) -> FastMCP:
             graph_path=graph_path,
             wiki_path=wiki_path,
             mock=mock,
+            executor=executor,
+            max_retries=max_retries,
+            cwd=cwd,
             config_path=config_path,
         )
 

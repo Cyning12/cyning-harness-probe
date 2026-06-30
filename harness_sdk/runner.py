@@ -36,6 +36,7 @@ class TaskRunner:
         session_id: str | None = None,
         mock_executor: Callable[[HarnessTask, str, CompiledPrompt], dict[str, str]] | None = None,
         executor: VerifyExecutor | None = None,
+        cwd: str | None = None,
     ):
         self.task = task
         self.graph = graph
@@ -43,6 +44,7 @@ class TaskRunner:
         self.session_id = session_id
         self.mock_executor = mock_executor
         self.executor = executor
+        self.cwd = cwd
         self._last_prompts: dict[str, CompiledPrompt] = {}
 
     def get_last_prompts(self) -> dict[str, CompiledPrompt]:
@@ -67,6 +69,7 @@ class TaskRunner:
         self,
         from_hat: str | None = None,
         to_hat: str | None = None,
+        max_retries: int = 0,
     ) -> TaskRunGraph:
         """生成运行计划，调用 executor，返回 TaskRunGraph。"""
         import uuid
@@ -126,26 +129,34 @@ class TaskRunner:
             )
             self._last_prompts[hat] = compiled
 
-            evidence_table = self._execute_hat(hat, compiled)
+            evidence_table = self._execute_hat(hat, compiled, max_retries=max_retries)
             run_node.evidence = json.dumps(evidence_table, ensure_ascii=False)
-            run_node.status = RunNodeStatus.done
+            if any(row["pass_fail"] == "fail" for row in evidence_table):
+                run_node.status = RunNodeStatus.blocked
+                run_graph.status = "blocked"
+                # 短回路：遇到 blocked 不再执行后续帽子
+                break
+            else:
+                run_node.status = RunNodeStatus.done
             handoff_summary = (
-                f"hat {hat} done · refs={','.join(c.ref for c in self.task.contracts)}"
+                f"hat {hat} {run_node.status.value} · refs={','.join(c.ref for c in self.task.contracts)}"
             )
 
-        run_graph.status = "done"
+        if run_graph.status != "blocked":
+            run_graph.status = "done"
         return run_graph
 
     def _execute_hat(
         self,
         hat: str,
         compiled: CompiledPrompt,
+        max_retries: int = 0,
     ) -> list[dict[str, str]]:
         if self.mock_executor:
             return self._run_with_mock_executor(hat, compiled)
         if self.executor is None:
             return self._mock_subagent_result(hat)
-        return self._run_contracts_with_executor(hat)
+        return self._run_contracts_with_executor(hat, max_retries=max_retries)
 
     def _run_with_mock_executor(
         self,
@@ -162,22 +173,31 @@ class TaskRunner:
             }
         ]
 
-    def _run_contracts_with_executor(self, hat: str) -> list[dict[str, str]]:
+    def _run_contracts_with_executor(self, hat: str, max_retries: int = 0) -> list[dict[str, str]]:
         assert self.executor is not None
         rows = []
         for contract in self.task.contracts:
-            result: ExecutionResult = asyncio.run(self.executor.run(contract.verify))
-            pass_fail = "pass" if result.returncode == 0 else "fail"
+            last_result: ExecutionResult | None = None
+            attempts = 0
+            while True:
+                result: ExecutionResult = asyncio.run(self.executor.run(contract.verify, cwd=self.cwd))
+                last_result = result
+                if result.returncode == 0 or attempts >= max_retries:
+                    break
+                attempts += 1
+
+            pass_fail = "pass" if last_result.returncode == 0 else "fail"
             evidence = json.dumps(
                 {
                     "hat": hat,
                     "verify": contract.verify,
-                    "returncode": result.returncode,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                    "elapsed_ms": result.elapsed_ms,
-                    "truncated": result.truncated,
-                    "timed_out": result.timed_out,
+                    "returncode": last_result.returncode,
+                    "stdout": last_result.stdout,
+                    "stderr": last_result.stderr,
+                    "elapsed_ms": last_result.elapsed_ms,
+                    "truncated": last_result.truncated,
+                    "timed_out": last_result.timed_out,
+                    "retries": attempts,
                 },
                 ensure_ascii=False,
             )

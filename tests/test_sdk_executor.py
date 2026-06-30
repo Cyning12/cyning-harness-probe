@@ -93,6 +93,26 @@ def test_runner_subprocess_executor_real_verify():
                 retry="no",
                 verify="echo ok",
             ),
+        ]
+    )
+    runner = TaskRunner(task, graph, wiki, executor=SubprocessExecutor())
+    run_graph = runner.run_sequence(from_hat="30", to_hat="40")
+    assert run_graph.status == "done"
+    assert len(run_graph.nodes) == 2
+
+    f1_node = next(n for n in run_graph.nodes if n.hat == "30")
+    f1_evidence = json.loads(f1_node.evidence)
+    assert len(f1_evidence) == 1
+    assert f1_evidence[0]["ref"] == "F1"
+    assert f1_evidence[0]["pass_fail"] == "pass"
+    assert json.loads(f1_evidence[0]["evidence"])["stdout"].strip() == "ok"
+
+
+def test_runner_subprocess_executor_real_verify_fail_blocks():
+    """TaskRunner 真实执行失败时标记 blocked。"""
+    graph, task, wiki = _sample_task_and_deps()
+    task = _task_with_contracts(
+        [
             AcceptanceContract(
                 ref="F2",
                 trigger="fail test",
@@ -104,19 +124,11 @@ def test_runner_subprocess_executor_real_verify():
     )
     runner = TaskRunner(task, graph, wiki, executor=SubprocessExecutor())
     run_graph = runner.run_sequence(from_hat="30", to_hat="40")
-    assert run_graph.status == "done"
-    assert len(run_graph.nodes) == 2
-
-    f1_node = next(n for n in run_graph.nodes if n.hat == "30")
-    f1_evidence = json.loads(f1_node.evidence)
-    assert len(f1_evidence) == 2
-    assert f1_evidence[0]["ref"] == "F1"
-    assert f1_evidence[0]["pass_fail"] == "pass"
-    assert json.loads(f1_evidence[0]["evidence"])["stdout"].strip() == "ok"
-
-    assert f1_evidence[1]["ref"] == "F2"
-    assert f1_evidence[1]["pass_fail"] == "fail"
-    assert json.loads(f1_evidence[1]["evidence"])["returncode"] == 1
+    assert run_graph.status == "blocked"
+    f2_node = next(n for n in run_graph.nodes if n.hat == "30")
+    f2_evidence = json.loads(f2_node.evidence)
+    assert f2_evidence[0]["pass_fail"] == "fail"
+    assert json.loads(f2_evidence[0]["evidence"])["returncode"] == 1
 
 
 def test_runner_executor_none_uses_mock_even_with_mock_executor_unset():
