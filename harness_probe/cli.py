@@ -118,7 +118,6 @@ def _persist_run_outputs(
 
 def cmd_compile(args: argparse.Namespace) -> int:
     graph_path, task_path = _build_task_from_args(args)
-    cfg = _load_config()
 
     graph = load_graph(graph_path)
     task = parse_task_markdown(task_path, dynamic_query=args.query or "")
@@ -148,7 +147,6 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     graph_path, task_path = _build_task_from_args(args)
-    cfg = _load_config()
 
     graph = load_graph(graph_path)
     task = parse_task_markdown(task_path, dynamic_query=args.query or "")

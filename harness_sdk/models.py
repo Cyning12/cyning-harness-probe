@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+@dataclass
+class ExecutionResult:
+    """一次 verify 命令的执行结果。"""
+
+    returncode: int
+    stdout: str
+    stderr: str
+    elapsed_ms: int
+    truncated: bool = False
+    timed_out: bool = False
 
 
 class GraphAnchor(BaseModel):
