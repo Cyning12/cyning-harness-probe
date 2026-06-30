@@ -2,7 +2,7 @@
 
 > **Harness 探针工程** — 验证 L0 图谱编译 + L1 验收合约 + L2 冷记忆 + KV-Cache 友好 Prompt 组装。  
 > **不是** Agent 产品 Runtime；dry-run 为主，无真实 LLM 调用。  
-> **当前版本**：**v0.3** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
+> **当前版本**：**v0.5** · 见 [`CHANGELOG.md`](./CHANGELOG.md)
 
 **仓库**：https://github.com/Cyning12/cyning-harness-probe · `git@github.com:Cyning12/cyning-harness-probe.git`
 
@@ -14,23 +14,45 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # 编译全帽链 Prompt（dry-run）
-python -m src.probe compile --task data/tasks/sample_task.md --entry RAG --hat 10-spec,20-review,30,40
-python -m src.probe compile --task data/tasks/sample_task.md --entry RAG --hat 50-reinspect --mode global
+python -m harness_probe.cli compile --task data/tasks/sample_task.md --entry RAG --hat 10-spec,20-review,30,40
+python -m harness_probe.cli compile --task data/tasks/sample_task.md --entry RAG --hat 50-reinspect --mode global
 
 # L0 子图查询
-python -m src.probe graph-query --node RAG --depth 2
+python -m harness_probe.cli graph-query --node RAG --depth 2
 
 # PRE_SPAWN_VERIFY 人闸校验
-python -m src.probe verify --task data/tasks/sample_task.md
+python -m harness_probe.cli verify --task data/tasks/sample_task.md
 
 # 模拟执行（30→40）
-python -m src.probe run --from-hat 30 --to-hat 40
+python -m harness_probe.cli run --from-hat 30 --to-hat 40
 
 # freeze_id 漂移检测
-python -m src.probe watch --once --entry RAG
+python -m harness_probe.cli watch --once --entry RAG
 
 # 测试
 pytest tests/ -q
+```
+
+## 目录结构
+
+```text
+harness-probe/
+├── harness_sdk/          # 无副作用 SDK（可 pip 安装）
+│   ├── models.py
+│   ├── compiler.py
+│   ├── builder.py
+│   ├── graph.py
+│   └── runner.py
+├── harness_probe/        # CLI + IO 层
+│   ├── cli.py
+│   ├── io.py
+│   └── rendering.py
+├── harness_mcp/          # MCP Server（Phase 3，可选依赖 [mcp]）
+│   └── ...
+├── tests/
+│   ├── test_sdk_*.py
+│   └── test_cli.py
+└── pyproject.toml
 ```
 
 ## 输出
@@ -43,18 +65,43 @@ pytest tests/ -q
 ## 使用 Ink 全量图谱
 
 ```bash
-python -m src.probe compile \
+python -m harness_probe.cli compile \
   --graph ../ai-ink-brain-api-python/docs/_tech_graph/graph.json \
   --task data/tasks/sample_task.md \
   --entry RAG
 ```
 
+## 作为 SDK 使用
+
+```python
+from harness_sdk import TaskRunner, build_hat_prompt
+from harness_probe.io import load_graph, parse_task_markdown, load_wiki_stub
+
+graph = load_graph("data/graph/sample_graph_v2.json")
+task = parse_task_markdown("data/tasks/sample_task.md")
+wiki = load_wiki_stub("data/wiki/syntheses_stub.json")
+
+runner = TaskRunner(task, graph, wiki)
+run_graph = runner.run_sequence(from_hat="30", to_hat="40")
+print(run_graph.status)
+```
+
+## MCP Server（可选）
+
+```bash
+pip install -e ".[mcp]"
+python -m harness_mcp.server
+```
+
+提供 Tool：`probe_compile` / `probe_run` / `probe_audit` / `probe_verify`  
+提供 Resource：`harness://freeze_id/current`
+
 ## 文档
 
 - [方法论定位（推荐阅读）](docs/METHODOLOGY_v1_zh.md)
-- [框架 Q&A 落盘](docs/QA_AND_FRAMEWORK_v1_zh.md)
 - [架构 v1](docs/ARCHITECTURE_v1_zh.md)
-- 工作区对照（Ink monorepo）：`docs/harness/guides/COMPARISON_tech_graph_coding_wiki_graph_memory_v1_zh.md` §2.2
+- [SDK 重构方案](docs/PLAN_SDK_REFACTOR_v1_zh.md)
+- [MCP Server 方案](docs/PLAN_MCP_SERVER_v1_zh.md)
 
 ## 在方法论中的位置
 

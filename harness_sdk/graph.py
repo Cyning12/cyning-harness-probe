@@ -2,24 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from collections import deque
-from pathlib import Path
 
-from src.models import GraphEdge, GraphNode, SubgraphResult, TechGraph
-
-
-def load_graph(path: str | Path) -> TechGraph:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    nodes = [GraphNode.model_validate(n) for n in raw.get("nodes", [])]
-    edges = [GraphEdge.model_validate(e) for e in raw.get("edges", [])]
-    return TechGraph(
-        schema_version=raw.get("schema_version", "graph_v2"),
-        freeze_id=raw.get("freeze_id", "UNKNOWN"),
-        generated_at=raw.get("generated_at"),
-        nodes=nodes,
-        edges=edges,
-    )
+from harness_sdk.models import GraphEdge, GraphNode, SubgraphResult, TechGraph
 
 
 def _adjacency(edges: list[GraphEdge]) -> dict[str, list[tuple[str, GraphEdge]]]:

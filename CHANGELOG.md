@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.5 · 2026-06-30
+
+### Added
+
+- **MCP Server**：新增 `harness_mcp/` 模块，基于 FastMCP 暴露 4 个 Tool 与 1 个 Resource。
+  - Tool：`probe_compile` / `probe_run` / `probe_audit` / `probe_verify`
+  - Resource：`harness://freeze_id/current`
+- **可选依赖**：`pip install -e ".[mcp]"` 安装 `mcp>=1.0.0`。
+- **MCP 测试**：新增 `tests/test_mcp_tools.py`、`tests/test_mcp_resources.py`。
+
+### Changed
+
+- CI workflow 改用 `pip install -e ".[dev,mcp]"` 以覆盖 dev + MCP 依赖。
+
+## v0.4 · 2026-06-30
+
+### Added
+
+- **SDK 重构**：新增 `harness_sdk/` 无副作用核心库（models / compiler / builder / graph / runner）。
+- **CLI 迁移**：新增 `harness_probe/` CLI + IO 层，命令入口从 `python -m src.probe` 迁移至 `python -m harness_probe.cli`。
+- **包化**：新增 `pyproject.toml`，提供 `harness-probe` 全局命令。
+- **测试分层**：拆分 `tests/test_probe.py` 为 `test_sdk_compiler.py` / `test_sdk_builder.py` / `test_sdk_graph.py` / `test_sdk_runner.py` / `test_cli.py`。
+
+### Changed
+
+- `TaskRunner.run_sequence` 为纯逻辑方法，返回 `TaskRunGraph`；文件持久化由 CLI 层负责。
+- `BlockedError` 迁移至 `harness_sdk/exceptions.py`。
+
+### Removed
+
+- 旧 `src/` 目录（Phase 1 代码已迁移至 `harness_sdk/` + `harness_probe/`）。
+
 ## v0.3 · 2026-06-29
 
 ### Added

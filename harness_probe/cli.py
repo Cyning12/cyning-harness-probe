@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import yaml
 
-from src.compiler import parse_task_markdown, validate_task_markdown
-from src.graph_loader import load_graph, query_subgraph
-from src.orchestrator import HarnessProbeCore
+from harness_probe.io import (
+    load_graph,
+    load_wiki_stub,
+    parse_task_markdown,
+    persist_prompt,
+    persist_run_graph,
+    validate_task_markdown,
+)
+from harness_probe.rendering import print_cache_boundary
+from harness_sdk import TaskRunner
+from harness_sdk.graph import query_subgraph
 
 
 def _repo_root() -> Path:
@@ -53,17 +62,23 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_compile(args: argparse.Namespace) -> int:
+def _resolve_path(arg: str | None, cfg_key: str) -> Path:
     cfg = _load_config()
-    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
-    if not graph_path.is_absolute():
-        graph_path = _repo_root() / graph_path
+    path = Path(arg or cfg.get("probe", {}).get(cfg_key, ""))
+    if not path.is_absolute():
+        path = _repo_root() / path
+    return path
+
+
+def _build_task_from_args(args: argparse.Namespace) -> tuple[Path, Path]:
+    graph_path = _resolve_path(args.graph, "default_graph")
     task_path = Path(args.task)
     if not task_path.is_absolute():
         task_path = _repo_root() / task_path
+    return graph_path, task_path
 
-    graph = load_graph(graph_path)
-    task = parse_task_markdown(task_path, dynamic_query=args.query or "")
+
+def _apply_task_overrides(task, args: argparse.Namespace):
     if args.entry:
         task = task.model_copy(update={"entry_node": args.entry})
     if args.hat:
@@ -80,23 +95,50 @@ def cmd_compile(args: argparse.Namespace) -> int:
         task = task.model_copy(update={"run_output_path": args.run_output})
     if args.mode:
         task = task.model_copy(update={"reinspect_mode": args.mode})
+    return task
 
-    core = HarnessProbeCore(
-        graph,
-        _repo_root() / cfg.get("probe", {}).get("default_wiki", "data/wiki/syntheses_stub.json"),
-        output_dir=_repo_root() / "outputs",
-    )
-    core.run_task(task, dry_run=True, show_prompt=not args.quiet)
+
+def _persist_run_outputs(
+    runner: TaskRunner,
+    run_graph,
+    output_dir: Path,
+    show_prompt: bool,
+) -> None:
+    session_id = run_graph.session_id
+    for hat, compiled in runner.get_last_prompts().items():
+        prompt_path = output_dir / f"prompt_{session_id}_hat{hat}.md"
+        persist_prompt(prompt_path, compiled)
+        if show_prompt:
+            print(f"\n--- hat {hat} · {prompt_path} ---")
+            print_cache_boundary(compiled)
+
+    run_path = output_dir / f"task_run_{session_id}.json"
+    persist_run_graph(run_path, run_graph)
+
+
+def cmd_compile(args: argparse.Namespace) -> int:
+    graph_path, task_path = _build_task_from_args(args)
+    cfg = _load_config()
+
+    graph = load_graph(graph_path)
+    task = parse_task_markdown(task_path, dynamic_query=args.query or "")
+    task = _apply_task_overrides(task, args)
+
+    wiki_path = _resolve_path(None, "default_wiki")
+    output_dir = _repo_root() / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = TaskRunner(task, graph, load_wiki_stub(wiki_path))
+    run_graph = runner.run_sequence()
+    _persist_run_outputs(runner, run_graph, output_dir, show_prompt=not args.quiet)
     print("\n✅ compile 完成 · 见 outputs/prompt_*.md 与 task_run_*.json")
     return 0
 
 
 def cmd_graph_query(args: argparse.Namespace) -> int:
-    cfg = _load_config()
-    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
-    if not graph_path.is_absolute():
-        graph_path = _repo_root() / graph_path
+    graph_path = _resolve_path(args.graph, "default_graph")
     graph = load_graph(graph_path)
+    cfg = _load_config()
     depth = args.depth or cfg.get("probe", {}).get("default_depth", 2)
     result = query_subgraph(graph, args.node, depth=depth)
     print(result.mermaid)
@@ -105,45 +147,23 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    graph_path, task_path = _build_task_from_args(args)
     cfg = _load_config()
-    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
-    if not graph_path.is_absolute():
-        graph_path = _repo_root() / graph_path
-    task_path = Path(args.task)
-    if not task_path.is_absolute():
-        task_path = _repo_root() / task_path
 
     graph = load_graph(graph_path)
     task = parse_task_markdown(task_path, dynamic_query=args.query or "")
-    if args.entry:
-        task = task.model_copy(update={"entry_node": args.entry})
-    if args.hat:
-        task = task.model_copy(update={"planned_hats": args.hat.split(",")})
-    if args.spec:
-        spec_path = Path(args.spec)
-        if not spec_path.is_absolute():
-            spec_path = _repo_root() / spec_path
-        spec_text = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
-        task = task.model_copy(update={"spec_path": str(args.spec), "spec_text": spec_text})
-    if args.review_target:
-        task = task.model_copy(update={"review_target": args.review_target})
-    if args.run_output:
-        task = task.model_copy(update={"run_output_path": args.run_output})
-    if args.mode:
-        task = task.model_copy(update={"reinspect_mode": args.mode})
+    task = _apply_task_overrides(task, args)
 
-    core = HarnessProbeCore(
-        graph,
-        _repo_root() / cfg.get("probe", {}).get("default_wiki", "data/wiki/syntheses_stub.json"),
-        output_dir=_repo_root() / "outputs",
-    )
-    run_result = core.run_task(
-        task,
-        dry_run=True,
-        show_prompt=not args.quiet,
+    wiki_path = _resolve_path(None, "default_wiki")
+    output_dir = _repo_root() / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = TaskRunner(task, graph, load_wiki_stub(wiki_path))
+    run_result = runner.run_sequence(
         from_hat=args.from_hat,
         to_hat=args.to_hat,
     )
+    _persist_run_outputs(runner, run_result, output_dir, show_prompt=not args.quiet)
     print(f"\n✅ run 完成 · session={run_result.session_id} · status={run_result.status}")
     print(f"   nodes: {[(n.hat, n.status.value) for n in run_result.nodes]}")
     print(f"   见 outputs/prompt_*.md 与 outputs/task_run_{run_result.session_id}.json")
@@ -152,16 +172,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_watch(args: argparse.Namespace) -> int:
     """监视 freeze_id 漂移。"""
-    import time
-
-    cfg = _load_config()
-    graph_path = Path(args.graph or cfg.get("probe", {}).get("default_graph", ""))
-    if not graph_path.is_absolute():
-        graph_path = _repo_root() / graph_path
+    graph_path = _resolve_path(args.graph, "default_graph")
     task_path = Path(args.task)
     if not task_path.is_absolute():
         task_path = _repo_root() / task_path
-
     interval = args.interval
 
     while True:
@@ -187,6 +201,17 @@ def cmd_watch(args: argparse.Namespace) -> int:
             return 0 if consistent else 1
 
         time.sleep(interval)
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """启动 MCP Server。"""
+    from harness_mcp.server import main as mcp_main
+
+    return mcp_main([
+        "--config", args.config or "",
+        "--transport", args.transport,
+        "--port", str(args.port),
+    ])
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -238,6 +263,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_gq.add_argument("--graph", default=None)
     p_gq.add_argument("--depth", type=int, default=None)
     p_gq.set_defaults(func=cmd_graph_query)
+
+    p_mcp = sub.add_parser("mcp", help="启动 MCP Server")
+    p_mcp.add_argument("--config", default=None, help="probe config yaml path")
+    p_mcp.add_argument("--transport", default="stdio", choices=["stdio", "sse"], help="MCP transport")
+    p_mcp.add_argument("--port", type=int, default=8080, help="SSE port")
+    p_mcp.set_defaults(func=cmd_mcp)
 
     return parser
 
