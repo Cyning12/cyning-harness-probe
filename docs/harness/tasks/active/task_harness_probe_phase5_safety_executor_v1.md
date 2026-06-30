@@ -14,9 +14,9 @@
 
 | 闸口 | 状态 | 说明 |
 | --- | --- | --- |
-| HG-TASK-DRAFT | `pending` | 本任务单定稿 |
-| HG-AUDIT-R1 | `pending` | R1 书面审通过后才允许改码 |
-| HG-EXEC-AUTH | `pending` | 执行前确认是否使用 Claude Code |
+| HG-TASK-DRAFT | `approved` | 本任务单定稿 |
+| HG-AUDIT-R1 | `approved` | R1 书面审通过，允许改码 |
+| HG-EXEC-AUTH | `approved` | 授权使用 Claude Code 执行 |
 
 ## 背景与目标
 
