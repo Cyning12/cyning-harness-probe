@@ -12,11 +12,13 @@
 | **test_strategy** | `required` |
 | **failure_paths** | 见下文 |
 
-| gate | status | blocks_hats | signoff |
+### 人工闸 `human_gate`
+
+| human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
-| HG-TASK-DRAFT | `approved` | — | 30 |
-| HG-AUDIT-R1 | `approved` | — | 30（轻量补丁，跳过 R1 审计） |
-| HG-EXEC-AUTH | `approved` | 30 | 30 |
+| HG-TASK-DRAFT | `approved` | 30 | 任务单定稿 |
+| HG-AUDIT-R1 | `approved` | 30 | 轻量补丁，跳过 R1 审计 |
+| HG-EXEC-AUTH | `approved` | 30 | 授权执行 30 改码 |
 
 ## 背景与目标
 
