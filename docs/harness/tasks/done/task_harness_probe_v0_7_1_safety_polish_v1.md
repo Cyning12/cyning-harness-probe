@@ -48,19 +48,23 @@ v0.7.0 已引入 `CommandSafetyChecker` 与 `SafetyMode`（whitelist/audit/unsaf
 
 ## 验收标准
 
-- [ ] `config/safety.yaml` 可被 `--safety-config` 加载
-- [ ] 项目级白名单扩展默认白名单，危险前缀不可被覆盖
-- [ ] `blocked` 时返回明确原因与操作建议
-- [ ] 新增 CLI 安全测试 ≥ 3 个
-- [ ] 新增 MCP 安全测试 ≥ 3 个
-- [ ] `pytest tests/ -q` 全绿
-- [ ] `ruff check harness_sdk tests harness_probe harness_mcp` 全绿
-- [ ] `mypy harness_sdk --ignore-missing-imports` 全绿
-- [ ] 图谱与 README 同步更新
+- [x] `config/safety.yaml` 可被 `--safety-config` 加载
+- [x] 项目级白名单扩展默认白名单，危险前缀不可被覆盖
+- [x] `blocked` 时返回明确原因与操作建议
+- [x] 新增 CLI 安全测试 ≥ 3 个
+- [x] 新增 MCP 安全测试 ≥ 3 个
+- [x] `pytest tests/ -q` 全绿
+- [x] `ruff check harness_sdk tests harness_probe harness_mcp` 全绿
+- [x] `mypy harness_sdk --ignore-missing-imports` 全绿
+- [x] 图谱与 README 同步更新
 
 ## 实现备忘
 
-- 待执行后回填
+- 已合并到 `main`（commit `4502e59`）
+- 新增文件：`config/safety.yaml`、`examples/safety/README.md`、`tests/test_cli_safety.py`、`tests/test_mcp_tools_safety.py`
+- 修改文件：`harness_sdk/safety.py`、`harness_sdk/executor.py`、`harness_sdk/runner.py`、`harness_probe/cli.py`、`harness_probe/io.py`、`harness_mcp/tools.py`、`pyproject.toml`、`CHANGELOG.md`、`docs/_tech_graph/90_executor.graph.yaml`
+- 验证：pytest 61 passed, ruff passed, mypy passed, graph-query OK, verify OK
+- 状态：关闭并归档到 `docs/harness/tasks/done/`
 
 ## 测试策略
 
