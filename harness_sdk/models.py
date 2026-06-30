@@ -20,6 +20,9 @@ class ExecutionResult:
     elapsed_ms: int
     truncated: bool = False
     timed_out: bool = False
+    blocked: bool = False
+    dry_run: bool = False
+    reason: str | None = None
 
 
 class GraphAnchor(BaseModel):

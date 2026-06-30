@@ -108,6 +108,9 @@ async def probe_run(
     executor: str = "mock",
     max_retries: int = 0,
     cwd: str | None = None,
+    dry_run: bool = False,
+    safety_mode: str = "whitelist",
+    execution_log_dir: str | None = None,
     config_path: str | None = None,
 ) -> str:
     """串行模拟执行多顶帽子，生成 L1.5 task_run 轨迹。"""
@@ -124,7 +127,20 @@ async def probe_run(
     use_real = executor == "real" or not mock
     if use_real:
         from harness_sdk.executor import SubprocessExecutor
-        real_executor = SubprocessExecutor()
+
+        safety_cfg = config.get("executor", {}).get("safety", {})
+        resolved_safety_mode = safety_mode or safety_cfg.get("mode", "whitelist")
+        resolved_log_dir = execution_log_dir or safety_cfg.get("execution_log_dir")
+        if resolved_log_dir:
+            rlp = Path(resolved_log_dir)
+            if not rlp.is_absolute():
+                rlp = _repo_root() / rlp
+            resolved_log_dir = str(rlp)
+        real_executor = SubprocessExecutor(
+            safety_mode=resolved_safety_mode,
+            dry_run=dry_run,
+            execution_log_dir=resolved_log_dir,
+        )
 
     if cwd:
         cwd_path = Path(cwd)

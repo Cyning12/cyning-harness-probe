@@ -42,7 +42,9 @@ async def test_subprocess_executor_echo_ok():
 
 @pytest.mark.asyncio
 async def test_subprocess_executor_exit_1():
-    executor = SubprocessExecutor()
+    executor = SubprocessExecutor(safety_mode="unsafe")
+    import os
+    os.environ["HARNESS_UNSAFE"] = "1"
     result = await executor.run("exit 1")
     assert result.returncode == 1
     assert result.stdout == ""
@@ -51,7 +53,7 @@ async def test_subprocess_executor_exit_1():
 
 @pytest.mark.asyncio
 async def test_subprocess_executor_timeout():
-    executor = SubprocessExecutor(timeout=0.1)
+    executor = SubprocessExecutor(timeout=0.1, safety_mode="unsafe")
     result = await executor.run("sleep 2")
     assert result.returncode == -1
     assert result.timed_out
@@ -60,7 +62,7 @@ async def test_subprocess_executor_timeout():
 
 @pytest.mark.asyncio
 async def test_subprocess_executor_stdout_truncation():
-    executor = SubprocessExecutor(max_stdout=10)
+    executor = SubprocessExecutor(max_stdout=10, safety_mode="unsafe")
     result = await executor.run("python -c \"print('A' * 100)\"")
     assert result.truncated
     assert "[truncated]" in result.stdout
@@ -122,7 +124,7 @@ def test_runner_subprocess_executor_real_verify_fail_blocks():
             ),
         ]
     )
-    runner = TaskRunner(task, graph, wiki, executor=SubprocessExecutor())
+    runner = TaskRunner(task, graph, wiki, executor=SubprocessExecutor(safety_mode="unsafe"))
     run_graph = runner.run_sequence(from_hat="30", to_hat="40")
     assert run_graph.status == "blocked"
     f2_node = next(n for n in run_graph.nodes if n.hat == "30")

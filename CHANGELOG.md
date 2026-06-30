@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.7 · 2026-06-30
+
+### Added
+
+- **安全执行器**：`harness_sdk/safety.py` 新增 `CommandSafetyChecker`。
+  - 支持三种模式：`whitelist`（默认）、`audit`、`unsafe`。
+  - 白名单默认允许 `pytest`、`python -m pytest`、`python -m harness_probe.cli`、`echo`、`cat`、`ls`、`pwd`、`git status/diff/log`。
+  - 黑名单覆盖危险 shell 元字符（`$()`、`&&`、`|`、`>` 等）与危险命令前缀（`rm`、`sudo`、`curl`、`ssh` 等）。
+  - 命令长度限制默认 1024 字符。
+- **dry-run 模式**：`SubprocessExecutor` 在 `dry_run=True` 时不执行命令，返回预览结果。
+- **执行日志**：`SubprocessExecutor` 支持 `execution_log_dir`，所有 `executed` / `blocked` / `timeout` / `dry_run` 事件写入 `execution_log_<session_id>.jsonl`。
+- **CLI 扩展**：`run` 子命令新增 `--dry-run`、`--safety-mode {whitelist,audit,unsafe}`、`--execution-log-dir PATH`。
+- **MCP 扩展**：`probe_run` 新增 `dry_run`、`safety_mode`、`execution_log_dir` 参数。
+- **模型扩展**：`ExecutionResult` 新增 `blocked`、`dry_run`、`reason` 字段。
+
+### Changed
+
+- `SubprocessExecutor` 默认启用白名单模式，旧测试需显式指定 `safety_mode="unsafe"`。
+- `TaskRunner` 透传 `session_id` 给 executor 用于日志关联。
+
 ## v0.6 · 2026-06-30
 
 ### Added
