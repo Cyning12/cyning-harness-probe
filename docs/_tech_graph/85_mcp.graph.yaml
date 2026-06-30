@@ -1,0 +1,45 @@
+graph_id: "85_mcp"
+title: "MCP Server 与 Tools"
+description: "基于 FastMCP 暴露 probe_compile / probe_run / probe_audit / probe_verify"
+version: "2026-06-30"
+direction: "TD"
+
+nodes:
+  - id: "MCP"
+    label: "MCP Server"
+    kind: entry
+  - id: "TOOLS"
+    label: "tools.py"
+    kind: service
+  - id: "RUNNER"
+    label: "TaskRunner"
+    kind: service
+  - id: "IO"
+    label: "io.py"
+    kind: service
+  - id: "MCP_HOST"
+    label: "MCP Host"
+    kind: external
+
+edges:
+  - from: "MCP"
+    to: "TOOLS"
+    label: "register tools"
+    anchors:
+      - path: "harness_mcp/server.py"
+        symbol: "create_server"
+  - from: "TOOLS"
+    to: "RUNNER"
+    label: "probe_run / probe_compile"
+    anchors:
+      - path: "harness_mcp/tools.py"
+        symbol: "probe_run"
+  - from: "TOOLS"
+    to: "IO"
+    label: "probe_verify / probe_audit"
+    anchors:
+      - path: "harness_mcp/tools.py"
+        symbol: "probe_verify"
+  - from: "MCP_HOST"
+    to: "MCP"
+    label: "stdio / sse transport"

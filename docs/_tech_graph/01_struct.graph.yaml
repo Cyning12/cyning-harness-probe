@@ -1,0 +1,66 @@
+graph_id: "01_struct"
+title: "核心数据结构"
+description: "harness-probe 中 Pydantic 与 dataclass 定义的核心模型"
+version: "2026-06-30"
+direction: "TB"
+
+nodes:
+  - id: "HarnessTask"
+    label: "HarnessTask"
+    kind: data
+  - id: "AcceptanceContract"
+    label: "AcceptanceContract"
+    kind: data
+  - id: "HumanGate"
+    label: "HumanGate"
+    kind: data
+  - id: "TechGraph"
+    label: "TechGraph"
+    kind: data
+  - id: "GraphNode"
+    label: "GraphNode"
+    kind: data
+  - id: "GraphEdge"
+    label: "GraphEdge"
+    kind: data
+  - id: "TaskRunGraph"
+    label: "TaskRunGraph"
+    kind: data
+  - id: "TaskRunNode"
+    label: "TaskRunNode"
+    kind: data
+  - id: "CompiledPrompt"
+    label: "CompiledPrompt"
+    kind: data
+  - id: "ExecutionResult"
+    label: "ExecutionResult"
+    kind: data
+  - id: "SafetyConfig"
+    label: "SafetyConfig"
+    kind: data
+
+edges:
+  - from: "HarnessTask"
+    to: "AcceptanceContract"
+    label: "contracts[]"
+  - from: "HarnessTask"
+    to: "HumanGate"
+    label: "human_gates[]"
+  - from: "TechGraph"
+    to: "GraphNode"
+    label: "nodes[]"
+  - from: "TechGraph"
+    to: "GraphEdge"
+    label: "edges[]"
+  - from: "TaskRunGraph"
+    to: "TaskRunNode"
+    label: "nodes[]"
+  - from: "TaskRunNode"
+    to: "AcceptanceContract"
+    label: "contract_refs[]"
+  - from: "CompiledPrompt"
+    to: "HarnessTask"
+    label: "static + semi_static + dynamic"
+  - from: "ExecutionResult"
+    to: "SafetyConfig"
+    label: "blocked / dry_run / reason"

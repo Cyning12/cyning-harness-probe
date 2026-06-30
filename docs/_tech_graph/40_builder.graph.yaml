@@ -1,6 +1,6 @@
 graph_id: "40_builder"
 title: "Prompt 三段式组装"
-description: "按帽子生成 static / semi_static / dynamic 三段式 Prompt"
+description: "按帽子类型组装 static_prefix / semi_static / dynamic_suffix"
 version: "2026-06-30"
 direction: "TD"
 
@@ -11,6 +11,9 @@ nodes:
   - id: "COMPILER"
     label: "compiler.py"
     kind: service
+  - id: "MODELS"
+    label: "CompiledPrompt"
+    kind: data
 
 edges:
   - from: "BUILDER"
@@ -19,3 +22,6 @@ edges:
     anchors:
       - path: "harness_sdk/builder.py"
         symbol: "_build_execution_hat_prompt"
+  - from: "BUILDER"
+    to: "MODELS"
+    label: "CompiledPrompt"
