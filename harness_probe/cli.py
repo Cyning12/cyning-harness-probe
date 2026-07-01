@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
+import warnings
+from dataclasses import asdict
 from pathlib import Path
 
 import yaml
@@ -21,7 +24,7 @@ from harness_probe.rendering import print_cache_boundary
 from harness_sdk import TaskRunner
 from harness_sdk.executor import SubprocessExecutor
 from harness_sdk.graph import query_subgraph
-from harness_sdk.safety import SafetyConfig
+from harness_sdk.safety import SafetyConfig, load_safety_config
 
 
 def _repo_root() -> Path:
@@ -147,7 +150,114 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str, str | None]:
+    """解析 CLI 与 probe_config.yaml 的安全参数，返回 (config, mode, log_dir)。"""
+    cfg = _load_config()
+    safety_cfg = cfg.get("executor", {}).get("safety", {})
+
+    safety_mode = args.safety_mode or safety_cfg.get("mode", "whitelist")
+    execution_log_dir = args.execution_log_dir or safety_cfg.get("execution_log_dir")
+    if execution_log_dir:
+        elp = Path(execution_log_dir)
+        if not elp.is_absolute():
+            elp = _repo_root() / elp
+        execution_log_dir = str(elp)
+
+    safety_config = SafetyConfig()
+    if args.safety_config:
+        safety_config = load_safety_config(args.safety_config)
+    elif safety_cfg.get("config"):
+        safety_config = load_safety_config(safety_cfg["config"])
+
+    if args.safety_reload:
+        if not safety_config.reload():
+            warnings.warn(
+                f"safety_config_reload_failed or no path: {safety_config.path}",
+                stacklevel=2,
+            )
+
+    return safety_config, safety_mode, execution_log_dir
+
+
+def _preview_report_to_dict(report, ref: str) -> dict:
+    data = asdict(report)
+    data["ref"] = ref
+    return data
+
+
+def _preview_reports_to_json(reports: list[dict]) -> str:
+    return json.dumps(reports, ensure_ascii=False, indent=2)
+
+
+def _preview_reports_to_markdown(reports: list[dict]) -> str:
+    lines = [
+        "# Harness Probe · 沙箱预览报告",
+        "",
+        "| Ref | Command | Parsed | Whitelist | Blacklist | Recommended | Risk |",
+        "|-----|---------|--------|-----------|-----------|-------------|------|",
+    ]
+    for report in reports:
+        row = [
+            report.get("ref", "-"),
+            f"`{report['cmd']}`",
+            " ".join(f"`{t}`" for t in report["parsed_tokens"]),
+            ", ".join(report["matched_whitelist"]) or "-",
+            ", ".join(report["matched_blacklist"]) or "-",
+            report["recommended_mode"],
+            report["risk_level"],
+        ]
+        lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+    for report in reports:
+        lines.append(f"## {report.get('ref', 'command')}")
+        lines.append(f"- **command**: `{report['cmd']}`")
+        lines.append(f"- **risk_level**: {report['risk_level']}")
+        lines.append(f"- **recommended_mode**: {report['recommended_mode']}")
+        if report.get("reason"):
+            lines.append(f"- **reason**: {report['reason']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _generate_preview(
+    args: argparse.Namespace,
+) -> tuple[list[dict], str]:
+    """生成沙箱预览报告。返回 (reports, format)。"""
+    safety_config, safety_mode, _ = _resolve_safety_params(args)
+    executor = SubprocessExecutor(
+        safety_mode=safety_mode,
+        dry_run=True,
+        safety_config=safety_config,
+    )
+
+    _, task_path = _build_task_from_args(args)
+    task = parse_task_markdown(task_path, dynamic_query=args.query or "")
+    task = _apply_task_overrides(task, args)
+
+    # preview 与 executor 互不影响；若用户同时指定 --executor real，给出提示
+    if args.executor == "real":
+        warnings.warn(
+            "--preview takes precedence over --executor real; no command will be executed",
+            stacklevel=2,
+        )
+
+    reports: list[dict] = []
+    for contract in task.contracts:
+        report = executor.preview(contract.verify)
+        reports.append(_preview_report_to_dict(report, contract.ref))
+
+    return reports, args.preview_format
+
+
 def cmd_run(args: argparse.Namespace) -> int:
+    if args.preview:
+        reports, fmt = _generate_preview(args)
+        if fmt == "markdown":
+            print(_preview_reports_to_markdown(reports))
+        else:
+            print(_preview_reports_to_json(reports))
+        return 0
+
     graph_path, task_path = _build_task_from_args(args)
 
     graph = load_graph(graph_path)
@@ -160,22 +270,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     executor = None
     if args.executor == "real":
-        cfg = _load_config()
-        safety_cfg = cfg.get("executor", {}).get("safety", {})
-        safety_mode = args.safety_mode or safety_cfg.get("mode", "whitelist")
-        execution_log_dir = args.execution_log_dir or safety_cfg.get("execution_log_dir")
-        if execution_log_dir:
-            elp = Path(execution_log_dir)
-            if not elp.is_absolute():
-                elp = _repo_root() / elp
-            execution_log_dir = str(elp)
-        from harness_sdk.safety import load_safety_config
-
-        safety_config = SafetyConfig()
-        if args.safety_config:
-            safety_config = load_safety_config(args.safety_config)
-        elif safety_cfg.get("config"):
-            safety_config = load_safety_config(safety_cfg["config"])
+        safety_config, safety_mode, execution_log_dir = _resolve_safety_params(args)
         executor = SubprocessExecutor(
             safety_mode=safety_mode,
             dry_run=args.dry_run,
@@ -319,6 +414,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--safety-config",
         default=None,
         help="安全策略 YAML 路径，与默认配置合并",
+    )
+    p_run.add_argument(
+        "--safety-reload",
+        action="store_true",
+        help="在构建 executor 前重新加载 --safety-config 指定的策略文件",
+    )
+    p_run.add_argument(
+        "--preview",
+        action="store_true",
+        help="不执行命令，仅输出沙箱影响报告",
+    )
+    p_run.add_argument(
+        "--preview-format",
+        default="json",
+        choices=["json", "markdown"],
+        help="沙箱预览报告格式：json（默认）/ markdown",
     )
     p_run.set_defaults(func=cmd_run)
 

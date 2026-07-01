@@ -10,6 +10,7 @@ import pytest
 from harness_probe.io import load_graph, load_wiki_stub, parse_task_markdown
 from harness_sdk import SubprocessExecutor, TaskRunner
 from harness_sdk.models import AcceptanceContract, ExecutionResult, HarnessTask
+from harness_sdk.safety import PreviewRiskLevel
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,6 +26,45 @@ def _task_with_contracts(contracts: list[AcceptanceContract]) -> HarnessTask:
     """基于 sample task 构造仅含指定 contracts 的 task。"""
     _, task, _ = _sample_task_and_deps()
     return task.model_copy(update={"contracts": contracts})
+
+
+@pytest.mark.asyncio
+async def test_subprocess_executor_preview_whitelist():
+    executor = SubprocessExecutor()
+    report = executor.preview("echo hello")
+    assert report.risk_level == PreviewRiskLevel.low.value
+    assert report.recommended_mode == "whitelist"
+    assert "echo" in report.matched_whitelist
+    assert not report.matched_blacklist
+
+
+@pytest.mark.asyncio
+async def test_subprocess_executor_preview_blacklist():
+    executor = SubprocessExecutor()
+    report = executor.preview("rm -rf /")
+    assert report.risk_level == PreviewRiskLevel.high.value
+    assert report.recommended_mode == "blocked"
+    assert report.matched_blacklist
+    assert "rm" in report.matched_blacklist[0]
+
+
+@pytest.mark.asyncio
+async def test_subprocess_executor_preview_unknown_medium():
+    executor = SubprocessExecutor()
+    report = executor.preview("unknown-cmd")
+    assert report.risk_level == PreviewRiskLevel.medium.value
+    assert report.recommended_mode == "audit"
+    assert not report.matched_whitelist
+    assert not report.matched_blacklist
+
+
+@pytest.mark.asyncio
+async def test_subprocess_executor_preview_metacharacter_high():
+    executor = SubprocessExecutor()
+    report = executor.preview("echo hello && rm -rf /")
+    assert report.risk_level == PreviewRiskLevel.high.value
+    assert report.recommended_mode == "blocked"
+    assert any("&&" in item for item in report.matched_blacklist)
 
 
 @pytest.mark.asyncio

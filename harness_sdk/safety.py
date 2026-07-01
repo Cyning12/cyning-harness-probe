@@ -1,12 +1,17 @@
-"""Harness SDK · 命令安全校验（v0.7）"""
+"""Harness SDK · 命令安全校验（v0.8）"""
 
 from __future__ import annotations
 
+import logging
 import os
+import shlex
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 class SafetyMode(str, Enum):
@@ -21,6 +26,14 @@ class SafetyConfigError(Exception):
     """安全策略配置错误。"""
 
 
+class PreviewRiskLevel(str, Enum):
+    """沙箱预览风险等级。"""
+
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
 @dataclass
 class SafetyResult:
     """单次命令安全校验结果。"""
@@ -28,6 +41,19 @@ class SafetyResult:
     allowed: bool
     reason: str | None = None
     mode: SafetyMode = SafetyMode.whitelist
+
+
+@dataclass
+class PreviewReport:
+    """单次命令的沙箱预览报告（不执行命令）。"""
+
+    cmd: str
+    parsed_tokens: list[str]
+    matched_whitelist: list[str]
+    matched_blacklist: list[str]
+    recommended_mode: str
+    risk_level: str
+    reason: str | None = None
 
 
 @dataclass
@@ -43,6 +69,36 @@ class SafetyConfig:
     max_command_length: int = 1024
     unsafe_env_name: str = "HARNESS_UNSAFE"
     unsafe_env_value: str = "1"
+
+    def __post_init__(self):
+        self._path: str | None = None
+
+    @property
+    def path(self) -> str | None:
+        """配置来源路径（由 load_safety_config 设置）。"""
+        return self._path
+
+    def reload(self) -> bool:
+        """从原始 path 重新加载 YAML 并合并默认配置。
+
+        加载失败时保留上一次有效配置，并记录错误日志。
+        """
+        if not self._path:
+            logger.warning("safety_config_reload_skipped: no source path")
+            return False
+
+        try:
+            new_config = load_safety_config(self._path)
+        except Exception as exc:  # noqa: BLE001 — 失败路径要求保留旧配置
+            logger.error("safety_config_reload_failed: %s", exc)
+            return False
+
+        for f in fields(self):
+            if f.name == "_path":
+                continue
+            setattr(self, f.name, getattr(new_config, f.name))
+        self._path = new_config._path
+        return True
 
 
 # 默认允许的白名单命令（前缀匹配）。
@@ -154,7 +210,7 @@ def load_safety_config(path: str | Path) -> SafetyConfig:
     if not isinstance(max_command_length, int) or max_command_length <= 0:
         raise SafetyConfigError("max_command_length_must_be_positive_int")
 
-    return SafetyConfig(
+    config = SafetyConfig(
         mode=mode,
         allowed_commands=allowed_commands,
         dangerous_metacharacters=dangerous_metacharacters,
@@ -163,6 +219,8 @@ def load_safety_config(path: str | Path) -> SafetyConfig:
         unsafe_env_name=str(raw.get("unsafe_env_name", "HARNESS_UNSAFE")),
         unsafe_env_value=str(raw.get("unsafe_env_value", "1")),
     )
+    config._path = str(config_path.resolve())
+    return config
 
 
 class CommandSafetyChecker:
@@ -190,6 +248,54 @@ class CommandSafetyChecker:
         if reason:
             return SafetyResult(allowed=False, reason=reason, mode=mode)
         return SafetyResult(allowed=True, reason=None, mode=mode)
+
+    def preview(self, cmd: str) -> PreviewReport:
+        """生成命令沙箱预览报告（不执行命令）。"""
+        stripped = cmd.lstrip()
+
+        matched_blacklist: list[str] = []
+        matched_whitelist: list[str] = []
+
+        if len(cmd) > self.config.max_command_length:
+            matched_blacklist.append(
+                f"command_too_long: {len(cmd)} > {self.config.max_command_length}"
+            )
+
+        for token in self.config.dangerous_metacharacters:
+            if token in cmd:
+                matched_blacklist.append(f"dangerous_metacharacter: {token!r}")
+
+        lowered = stripped.lower()
+        for prefix in self.config.dangerous_prefixes:
+            if lowered.startswith(prefix.lower()):
+                matched_blacklist.append(f"dangerous_command_prefix: {prefix!r}")
+
+        for allowed in self.config.allowed_commands:
+            if stripped.startswith(allowed):
+                matched_whitelist.append(allowed)
+
+        if matched_blacklist:
+            risk_level = PreviewRiskLevel.high.value
+            recommended_mode = "blocked"
+            reason = matched_blacklist[0]
+        elif matched_whitelist:
+            risk_level = PreviewRiskLevel.low.value
+            recommended_mode = "whitelist"
+            reason = None
+        else:
+            risk_level = PreviewRiskLevel.medium.value
+            recommended_mode = "audit"
+            reason = "not_in_whitelist"
+
+        return PreviewReport(
+            cmd=cmd,
+            parsed_tokens=shlex.split(stripped),
+            matched_whitelist=matched_whitelist,
+            matched_blacklist=matched_blacklist,
+            recommended_mode=recommended_mode,
+            risk_level=risk_level,
+            reason=reason,
+        )
 
     def _unsafe_confirmed(self) -> bool:
         return os.environ.get(self.config.unsafe_env_name) == self.config.unsafe_env_value

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.0 · 2026-06-30
+
+### Added
+
+- **策略热重载（8.1）**：`harness_sdk/safety.py` 的 `SafetyConfig` 新增显式 `reload()` 方法，从原始 `path` 重新加载白名单/黑名单。
+  - CLI 新增 `--safety-reload`：在构建 executor 前重新加载 `--safety-config` 指定的策略文件。
+  - 重载失败（YAML 损坏）时保留上一次有效配置并返回 `False`。
+- **沙箱预览（8.2）**：真实执行前生成命令影响报告，不执行任何命令。
+  - `SubprocessExecutor.preview()` 返回命令解析、命中白名单/黑名单、建议模式与风险等级（low/medium/high）。
+  - CLI 新增 `--preview` / `--preview-format`（json / markdown），与 `--executor real` 同时指定时优先 preview 并发出警告。
+  - `harness_mcp/tools.py` 的 `probe_run` 新增 `preview` / `preview_format` 参数。
+- **显式 AcceptanceContract verify**：`harness_sdk/compiler.py` 在 task 含显式 `## AcceptanceContract` 表时，按 `ref` 覆盖 failure_paths 自动推断的 verify 命令，使预览可反映任务作者指定的真实命令。
+
 ## v0.7.1 · 2026-06-30
 
 ### Added
