@@ -1,0 +1,72 @@
+graph_id: "92_task_schema"
+title: "任务单 Schema 与校验"
+description: "任务单从自由 Markdown 升级为 Schema 化数据，为 verify 与 Ops Desk 提供统一输入契约"
+version: "2026-07-01"
+direction: "TD"
+
+nodes:
+  - id: "TASK_FILES"
+    label: "docs/harness/tasks/active/*.md"
+    kind: storage
+  - id: "TASK_PARSER"
+    label: "harness_sdk/task_parser.py"
+    kind: service
+  - id: "TASK_SCHEMA"
+    label: "harness_sdk/task_schema.py"
+    kind: service
+  - id: "TASK_VALIDATE_CLI"
+    label: "harness-probe task validate"
+    kind: entry
+  - id: "HUMAN_GATES"
+    label: "human_gate 表"
+    kind: input
+  - id: "GRAPH_DELTA"
+    label: "docs/_tech_graph/*.graph.yaml"
+    kind: storage
+  - id: "PRE_SPAWN_VERIFY"
+    label: "harness-probe verify"
+    kind: entry
+  - id: "OPS_DESK"
+    label: "Ops Desk 看板"
+    kind: entry
+
+edges:
+  - from: "TASK_FILES"
+    to: "TASK_PARSER"
+    label: "parse markdown"
+    anchors:
+      - path: "harness_sdk/task_parser.py"
+        symbol: "parse_task_file"
+  - from: "HUMAN_GATES"
+    to: "TASK_PARSER"
+    label: "extract gates"
+    anchors:
+      - path: "harness_sdk/task_parser.py"
+        symbol: "parse_human_gates"
+  - from: "TASK_PARSER"
+    to: "TASK_SCHEMA"
+    label: "validate"
+    anchors:
+      - path: "harness_sdk/task_schema.py"
+        symbol: "TaskSchema.model_validate"
+  - from: "GRAPH_DELTA"
+    to: "TASK_SCHEMA"
+    label: "existence check"
+    anchors:
+      - path: "harness_sdk/task_schema.py"
+        symbol: "TaskSchema._validate_graph_delta"
+  - from: "TASK_SCHEMA"
+    to: "TASK_VALIDATE_CLI"
+    label: "report errors"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_task_validate"
+  - from: "TASK_SCHEMA"
+    to: "PRE_SPAWN_VERIFY"
+    label: "gate / freeze_id contract"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_verify"
+  - from: "TASK_SCHEMA"
+    to: "OPS_DESK"
+    label: "task metadata feed"
