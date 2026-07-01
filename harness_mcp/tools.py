@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import warnings
+from dataclasses import asdict
 from pathlib import Path
 
 from harness_mcp.config import get_default_graph_path, get_default_wiki_path, load_mcp_config
@@ -113,6 +115,8 @@ async def probe_run(
     execution_log_dir: str | None = None,
     config_path: str | None = None,
     safety_config: str | None = None,
+    preview: bool = False,
+    preview_format: str = "json",
 ) -> str:
     """串行模拟执行多顶帽子，生成 L1.5 task_run 轨迹。"""
     config = _resolve_config(config_path)
@@ -123,6 +127,17 @@ async def probe_run(
     task = task.model_copy(update={"entry_node": entry_node})
 
     wiki_entries = load_wiki_stub(wpath)
+
+    if preview:
+        return _probe_run_preview(
+            task,
+            executor=executor,
+            safety_mode=safety_mode,
+            execution_log_dir=execution_log_dir,
+            config=config,
+            safety_config=safety_config,
+            preview_format=preview_format,
+        )
 
     real_executor = None
     use_real = executor == "real" or not mock
@@ -193,6 +208,78 @@ def _persist_prompts(runner: TaskRunner, run_graph, output_dir: Path) -> None:
     for hat, compiled in runner.get_last_prompts().items():
         prompt_path = output_dir / f"prompt_{run_graph.session_id}_hat{hat}.md"
         persist_prompt(prompt_path, compiled)
+
+
+def _probe_run_preview(
+    task,
+    *,
+    executor: str,
+    safety_mode: str,
+    execution_log_dir: str | None,
+    config: dict,
+    safety_config: str | None,
+    preview_format: str,
+) -> str:
+    """probe_run 的 preview 模式：不执行命令，返回结构化影响报告。"""
+    from harness_sdk.executor import SubprocessExecutor
+    from harness_sdk.safety import load_safety_config
+
+    if executor == "real":
+        warnings.warn(
+            "preview=True takes precedence over executor='real'; no command will be executed",
+            stacklevel=2,
+        )
+
+    safety_cfg = config.get("executor", {}).get("safety", {})
+    resolved_safety_mode = safety_mode or safety_cfg.get("mode", "whitelist")
+    resolved_log_dir = execution_log_dir or safety_cfg.get("execution_log_dir")
+    if resolved_log_dir:
+        rlp = Path(resolved_log_dir)
+        if not rlp.is_absolute():
+            rlp = _repo_root() / rlp
+        resolved_log_dir = str(rlp)
+
+    safety_cfg_obj = None
+    if safety_config:
+        safety_cfg_obj = load_safety_config(safety_config)
+    elif safety_cfg.get("config"):
+        safety_cfg_obj = load_safety_config(safety_cfg["config"])
+
+    preview_executor = SubprocessExecutor(
+        safety_mode=resolved_safety_mode,
+        dry_run=True,
+        execution_log_dir=resolved_log_dir,
+        safety_config=safety_cfg_obj,
+    )
+
+    reports = []
+    for contract in task.contracts:
+        report = preview_executor.preview(contract.verify)
+        data = asdict(report)
+        data["ref"] = contract.ref
+        reports.append(data)
+
+    if preview_format == "markdown":
+        lines = [
+            "# Harness Probe · 沙箱预览报告",
+            "",
+            "| Ref | Command | Parsed | Whitelist | Blacklist | Recommended | Risk |",
+            "|-----|---------|--------|-----------|-----------|-------------|------|",
+        ]
+        for report in reports:
+            row = [
+                report.get("ref", "-"),
+                f"`{report['cmd']}`",
+                " ".join(f"`{t}`" for t in report["parsed_tokens"]),
+                ", ".join(report["matched_whitelist"]) or "-",
+                ", ".join(report["matched_blacklist"]) or "-",
+                report["recommended_mode"],
+                report["risk_level"],
+            ]
+            lines.append("| " + " | ".join(row) + " |")
+        return json.dumps({"ok": True, "preview": "\n".join(lines)}, ensure_ascii=False)
+
+    return json.dumps({"ok": True, "preview": reports}, ensure_ascii=False)
 
 
 async def probe_audit(

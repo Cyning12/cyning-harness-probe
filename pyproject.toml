@@ -1,6 +1,6 @@
 [project]
 name = "harness-probe"
-version = "0.7.1"
+version = "0.8.0"
 description = "Harness Probe · L0/L1/L1.5/L2 编译探针"
 readme = "README.md"
 license = {text = "MIT"}

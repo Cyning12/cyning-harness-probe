@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -194,3 +197,156 @@ async def test_subprocess_executor_with_custom_safety_config(tmp_path):
 
     result = await executor.run("unknown-cmd")
     assert result.blocked is True
+
+
+def _task_with_contracts(task_path: Path, verify: str) -> None:
+    base = _minimal_task_text()
+    contracts = (
+        "## 验收标准\n\n"
+        "- [ ] F1\n\n"
+        "## entry_node\n\n`CLI`\n\n"
+        "## AcceptanceContract\n\n"
+        f"| ref | trigger | expected | retry | verify |\n"
+        f"|-----|---------|----------|-------|--------|\n"
+        f"| F1  | t       | e        | no    | `{verify}` |\n"
+    )
+    task_path.write_text(base + "\n" + contracts, encoding="utf-8")
+
+
+def _capture_stdout(argv: list[str]) -> tuple[int, str]:
+    """运行 CLI 并捕获 stdout，返回 (exit_code, output)。"""
+    import io
+
+    captured = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = captured
+    try:
+        ret = main(argv)
+        return ret, captured.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+
+def test_cli_preview_json_output(tmp_path):
+    """--preview 输出 JSON 报告且不执行命令。"""
+    task = tmp_path / "task.md"
+    _task_with_contracts(task, "echo preview-test")
+    ret, output = _capture_stdout(
+        [
+            "run",
+            "--task",
+            str(task),
+            "--preview",
+            "--graph",
+            str(REPO_ROOT / "docs" / "_tech_graph" / "graph.json"),
+        ]
+    )
+    assert ret == 0
+    data = json.loads(output)
+    assert len(data) == 1
+    assert data[0]["cmd"] == "echo preview-test"
+    assert data[0]["risk_level"] == "low"
+    assert data[0]["recommended_mode"] == "whitelist"
+
+
+def test_cli_preview_markdown_output(tmp_path):
+    """--preview --preview-format markdown 输出 Markdown 报告。"""
+    task = tmp_path / "task.md"
+    _task_with_contracts(task, "rm -rf /")
+    ret, output = _capture_stdout(
+        [
+            "run",
+            "--task",
+            str(task),
+            "--preview",
+            "--preview-format",
+            "markdown",
+            "--graph",
+            str(REPO_ROOT / "docs" / "_tech_graph" / "graph.json"),
+        ]
+    )
+    assert ret == 0
+    assert "沙箱预览报告" in output
+    assert "rm -rf /" in output
+    assert "high" in output
+
+
+def test_cli_preview_takes_precedence_over_executor_real(tmp_path):
+    """--preview 与 --executor real 同时指定时优先 preview，不执行命令。"""
+    task = tmp_path / "task.md"
+    _task_with_contracts(task, "echo preview-precedence")
+    ret, output = _capture_stdout(
+        [
+            "run",
+            "--task",
+            str(task),
+            "--executor",
+            "real",
+            "--preview",
+            "--graph",
+            str(REPO_ROOT / "docs" / "_tech_graph" / "graph.json"),
+        ]
+    )
+    assert ret == 0
+    data = json.loads(output)
+    assert data[0]["cmd"] == "echo preview-precedence"
+    assert data[0]["risk_level"] == "low"
+
+
+def test_cli_safety_reload(tmp_path, runner):
+    """--safety-reload 在运行前重新加载配置并生效。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text(
+        "mode: whitelist\nallowed_commands:\n  - echo reload-test\n",
+        encoding="utf-8",
+    )
+    task = tmp_path / "task.md"
+    _task_with_contracts(task, "echo reload-test")
+    ret = runner(
+        [
+            "run",
+            "--task",
+            str(task),
+            "--executor",
+            "real",
+            "--safety-config",
+            str(config),
+            "--safety-reload",
+            "--graph",
+            str(REPO_ROOT / "docs" / "_tech_graph" / "graph.json"),
+            "--quiet",
+        ]
+    )
+    assert ret == 0
+
+
+def test_safety_config_reload_keeps_valid_config_on_bad_yaml(tmp_path):
+    """配置重载失败时保留上一次有效配置。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text(
+        "mode: whitelist\nallowed_commands:\n  - custom-reload-cmd\n",
+        encoding="utf-8",
+    )
+    cfg = load_safety_config(config)
+    assert "custom-reload-cmd" in cfg.allowed_commands
+
+    # 破坏 YAML
+    config.write_text("mode: [unclosed", encoding="utf-8")
+    time.sleep(0.05)
+    reloaded = cfg.reload()
+    assert reloaded is False
+    assert "custom-reload-cmd" in cfg.allowed_commands
+
+
+def test_safety_config_reload_updates_whitelist(tmp_path):
+    """reload() 从原始 path 重新加载后新白名单生效。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text("allowed_commands:\n  - first-cmd\n", encoding="utf-8")
+    cfg = load_safety_config(config)
+    assert "first-cmd" in cfg.allowed_commands
+    assert "second-cmd" not in cfg.allowed_commands
+
+    config.write_text("allowed_commands:\n  - second-cmd\n", encoding="utf-8")
+    assert cfg.reload() is True
+    assert "second-cmd" in cfg.allowed_commands
+    assert "first-cmd" not in cfg.allowed_commands

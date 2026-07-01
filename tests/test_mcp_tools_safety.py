@@ -135,3 +135,73 @@ async def test_mcp_probe_run_unsafe_requires_env(
     assert data["ok"] is True
     # unsafe 未确认时，所有 verify 会被 blocked
     assert data["status"] == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_mcp_probe_run_preview_json(
+    tmp_path, temp_task, temp_graph
+):
+    """probe_run preview=True 返回 JSON 影响报告，不执行命令。"""
+    result = await probe_run(
+        task_path=str(temp_task),
+        entry_node="ROOT",
+        from_hat="30",
+        to_hat="40",
+        graph_path=str(temp_graph),
+        wiki_path=str(tmp_path / "wiki.json"),
+        executor="real",
+        preview=True,
+    )
+    data = json.loads(result)
+    assert data["ok"] is True
+    assert "preview" in data
+    reports = data["preview"]
+    assert isinstance(reports, list)
+    assert len(reports) == 1
+    assert reports[0]["cmd"] == "echo ok"
+    assert reports[0]["risk_level"] == "low"
+    assert reports[0]["recommended_mode"] == "whitelist"
+
+
+@pytest.mark.asyncio
+async def test_mcp_probe_run_preview_markdown(
+    tmp_path, temp_task, temp_graph
+):
+    """probe_run preview=True preview_format=markdown 返回 Markdown 报告。"""
+    result = await probe_run(
+        task_path=str(temp_task),
+        entry_node="ROOT",
+        from_hat="30",
+        to_hat="40",
+        graph_path=str(temp_graph),
+        wiki_path=str(tmp_path / "wiki.json"),
+        executor="real",
+        preview=True,
+        preview_format="markdown",
+    )
+    data = json.loads(result)
+    assert data["ok"] is True
+    assert "preview" in data
+    assert "沙箱预览报告" in data["preview"]
+    assert "echo ok" in data["preview"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_probe_run_preview_takes_precedence(
+    tmp_path, temp_task, temp_graph
+):
+    """preview=True 优先于真实执行，不执行命令。"""
+    result = await probe_run(
+        task_path=str(temp_task),
+        entry_node="ROOT",
+        from_hat="30",
+        to_hat="40",
+        graph_path=str(temp_graph),
+        wiki_path=str(tmp_path / "wiki.json"),
+        executor="real",
+        preview=True,
+    )
+    data = json.loads(result)
+    assert data["ok"] is True
+    assert "preview" in data
+    assert data["preview"][0]["risk_level"] == "low"

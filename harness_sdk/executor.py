@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from harness_sdk.models import ExecutionResult
-from harness_sdk.safety import CommandSafetyChecker, SafetyConfig, SafetyMode
+from harness_sdk.safety import CommandSafetyChecker, PreviewReport, SafetyConfig, SafetyMode
 
 
 class VerifyExecutor(Protocol):
@@ -52,6 +52,10 @@ class SubprocessExecutor:
         else:
             safety_config.mode = safety_mode
         self._checker = CommandSafetyChecker(safety_config)
+
+    def preview(self, cmd: str) -> PreviewReport:
+        """生成命令沙箱预览报告（不执行命令）。"""
+        return self._checker.preview(cmd)
 
     async def run(
         self,

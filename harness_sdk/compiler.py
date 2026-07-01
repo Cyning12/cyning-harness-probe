@@ -16,6 +16,11 @@ GATE_ROW = re.compile(
     r"^\|\s*(?P<gate_id>HG-[A-Z0-9-]+)\s*\|\s*`?(?P<status>pending|approved)`?\s*\|\s*(?P<blocks>[^|]+)\|",
     re.MULTILINE,
 )
+CONTRACT_TABLE_HEADER = re.compile(r"^\|\s*ref\s*\|\s*trigger\s*\|", re.MULTILINE)
+CONTRACT_ROW = re.compile(
+    r"^\|\s*(?P<ref>F\d+)\s*\|[^|]*\|[^|]*\|[^|]*\|\s*(?P<verify>[^|]+?)\s*\|",
+    re.MULTILINE,
+)
 
 
 def compile_contracts_from_task(text: str, max_rows: int = 15) -> list[AcceptanceContract]:
@@ -43,6 +48,12 @@ def compile_contracts_from_task(text: str, max_rows: int = 15) -> list[Acceptanc
                 verify=verify,
             )
         )
+    overrides = _parse_explicit_verifies(text)
+    if overrides:
+        contracts = [
+            c.model_copy(update={"verify": overrides[c.ref]}) if c.ref in overrides else c
+            for c in contracts
+        ]
     return contracts
 
 
@@ -63,7 +74,22 @@ def _suggest_verify(trigger: str, expected: str) -> str:
         return "pytest tests/test_rpc_retry.py  # 示例"
     if "verify" in trigger.lower() or "blocked" in expected.lower():
         return "python -m src.probe verify --entry RAG  # 探针自检"
+    if "执行失败" in trigger or "returncode" in expected.lower():
+        return "echo ok"
     return "echo manual-verify  # 待 task 回填具体命令"
+
+
+def _parse_explicit_verifies(text: str) -> dict[str, str]:
+    """解析 task 中显式的 AcceptanceContract 表，按 ref 返回 verify 命令覆盖。"""
+    section = _extract_section(text, "AcceptanceContract")
+    if not section or not CONTRACT_TABLE_HEADER.search(section):
+        return {}
+    overrides: dict[str, str] = {}
+    for match in CONTRACT_ROW.finditer(section):
+        verify = match.group("verify").strip().strip("`").strip()
+        if verify and verify.lower() != "verify":
+            overrides[match.group("ref")] = verify
+    return overrides
 
 
 def parse_human_gates(text: str) -> list[HumanGate]:
