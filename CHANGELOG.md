@@ -14,7 +14,7 @@
   - CLI 新增 `harness-probe config watch`（前台/后台监听）并支持 `--verbose`。
   - 新增 `config/executor.test.yaml` 作为测试环境示例。
   - 新增 `docs/_tech_graph/87_config_center_enhancement.graph.yaml`。
-  - 新增测试 `tests/test_config_v0_9_5.py` 覆盖模型校验、多环境、热重载与 CLI 输出。
+  - 新增测试 `tests/test_config_enhancement.py` 覆盖模型校验、多环境、热重载与 CLI 输出。
 
 ### Changed
 
