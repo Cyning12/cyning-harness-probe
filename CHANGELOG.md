@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.10.0 · 2026-07-01
+
+### Added
+
+- **任务单 Schema 化（P0-3）**：
+  - 新增 `harness_sdk/task_schema.py`：定义 Pydantic 模型 `TaskSchema` / `TaskInfo` / `HumanGate` / `AcceptanceItem` / `FailurePath`。
+  - 新增 `harness_sdk/task_parser.py`：解析 YAML frontmatter、Harness 元信息表、人工闸表、验收标准 `- [ ]` / `- [x]` 列表与失败路径表。
+  - 字段级校验：`status ∈ {pending, approved, completed}`，`blocks_hats` 必须为整数列表，`test_strategy ∈ {required, recommended, not_applicable}`，`graph_delta` 路径存在性校验。
+  - 向后兼容：旧任务单中的 `completed` 状态自动映射为 `approved`，但会发出 `DeprecationWarning`。
+  - CLI 新增 `harness-probe task validate`：支持 `--task` / `--dir` 输入、`--format json|markdown` 输出、`--strict` 模式将 `completed` 标记为非法。
+  - 新增 `docs/_tech_graph/92_task_schema.graph.yaml`，描述任务单解析到 `verify` 与 Ops Desk 的依赖关系。
+  - 新增测试 `tests/test_task_schema.py`、`tests/test_task_parser.py`、`tests/test_cli_task_validate.py`，覆盖模型校验、Markdown 解析、CLI 返回码与批量目录扫描。
+
+### Changed
+
+- `pyproject.toml` 版本更新至 `0.10.0`。
+
 ## v0.9.5 · 2026-07-01
 
 ### Added

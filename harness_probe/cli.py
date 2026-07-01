@@ -5,14 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import uuid
 import warnings
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from harness_probe.io import (
     load_graph,
@@ -23,6 +26,7 @@ from harness_probe.io import (
     validate_task_markdown,
 )
 from harness_sdk import ConfigError, ConfigManager, TaskRunner
+from harness_sdk.task_parser import parse_task_file
 from harness_sdk.audit import AuditLogger, AuditReader, AuditReport
 from harness_sdk.audit.events import CompileEvent, RunEvent, VerifyEvent
 from harness_sdk.executor import (
@@ -728,6 +732,146 @@ def cmd_config_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+_GATE_COMPLETED_RE = re.compile(
+    r"^\|\s*(?P<gate_id>HG-[A-Z0-9-]+)\s*\|\s*`?completed`?\s*\|",
+    re.MULTILINE,
+)
+
+
+def _collect_task_validate_errors(path: Path, strict: bool) -> tuple[list[str], list[str]]:
+    """校验单个任务单，返回 (errors, warnings)。"""
+    errors: list[str] = []
+    warnings_list: list[str] = []
+    try:
+        schema, warns = parse_task_file(path)
+    except ValidationError as exc:
+        for err in exc.errors():
+            loc = ".".join(str(item) for item in err["loc"])
+            errors.append(f"{loc}: {err['msg']}")
+        return errors, warnings_list
+    except ValueError as exc:
+        errors.append(f"parse_error: {exc}")
+        return errors, warnings_list
+
+    warnings_list.extend(warns)
+
+    # 人闸阻塞 30
+    for gate in schema.blocking_gates("30"):
+        errors.append(
+            f"HUMAN-GATE-BLOCKS-30: {gate.gate_id} status={gate.status.value} "
+            f"blocks_hats={gate.blocks_hats}"
+        )
+
+    # --strict 模式下 completed 非法
+    if strict:
+        text = path.read_text(encoding="utf-8")
+        for match in _GATE_COMPLETED_RE.finditer(text):
+            errors.append(
+                f"STRICT-COMPLETED-ILLEGAL: gate {match.group('gate_id')} "
+                "uses deprecated status 'completed', use 'approved'"
+            )
+
+    return errors, warnings_list
+
+
+def _relative_task_path(path: Path) -> Path:
+    if path.is_absolute():
+        try:
+            return path.relative_to(_repo_root())
+        except ValueError:
+            pass
+    return path
+
+
+def _format_task_results_markdown(results: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for r in results:
+        rel = _relative_task_path(Path(r["path"]))
+        lines.append(f"=== {rel} ===")
+        if r["ok"] and not r["warnings"]:
+            lines.append("OK · task schema valid")
+        else:
+            for w in r["warnings"]:
+                lines.append(f"[WARN] {w}")
+            for e in r["errors"]:
+                lines.append(f"[ERROR] {e}")
+            lines.append("FAIL" if r["errors"] else "OK (warnings)")
+    return "\n".join(lines)
+
+
+def _format_task_results_json(results: list[dict[str, Any]]) -> str:
+    payload = []
+    for r in results:
+        payload.append(
+            {
+                "path": str(_relative_task_path(Path(r["path"]))),
+                "ok": r["ok"],
+                "errors": r["errors"],
+                "warnings": r["warnings"],
+            }
+        )
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def cmd_task_validate(args: argparse.Namespace) -> int:
+    """校验任务单 Schema 与人闸。"""
+    if args.task and args.dir:
+        print("specify either --task or --dir, not both", file=sys.stderr)
+        return 2
+    if not args.task and not args.dir:
+        print("specify --task <path> or --dir <dir>", file=sys.stderr)
+        return 2
+
+    paths: list[Path] = []
+    if args.task:
+        p = Path(args.task)
+        if not p.is_absolute():
+            p = _repo_root() / p
+        paths.append(p)
+    else:
+        d = Path(args.dir)
+        if not d.is_absolute():
+            d = _repo_root() / d
+        if not d.is_dir():
+            print(f"dir not found: {d}", file=sys.stderr)
+            return 2
+        paths = sorted(d.glob("task_*.md"))
+        if not paths:
+            print(f"no task_*.md files found in {d}", file=sys.stderr)
+            return 2
+
+    results: list[dict[str, Any]] = []
+    for p in paths:
+        if not p.is_file():
+            results.append(
+                {
+                    "path": str(p),
+                    "ok": False,
+                    "errors": ["file not found"],
+                    "warnings": [],
+                }
+            )
+            continue
+        errors, warnings_list = _collect_task_validate_errors(p, strict=args.strict)
+        results.append(
+            {
+                "path": str(p),
+                "ok": not errors,
+                "errors": errors,
+                "warnings": warnings_list,
+            }
+        )
+
+    if args.format == "json":
+        print(_format_task_results_json(results))
+    else:
+        print(_format_task_results_markdown(results))
+
+    if any(not r["ok"] for r in results):
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Harness Probe · L0/L1/L1.5/L2 探针")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -972,6 +1116,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="重载后打印完整配置",
     )
     p_config_watch.set_defaults(func=cmd_config_watch)
+
+    p_task = sub.add_parser("task", help="任务单 Schema 校验")
+    task_sub = p_task.add_subparsers(dest="task_command", required=True)
+
+    p_task_validate = task_sub.add_parser("validate", help="校验任务单 Schema 与人闸")
+    p_task_validate.add_argument(
+        "--task",
+        default=None,
+        help="任务单 Markdown 文件路径",
+    )
+    p_task_validate.add_argument(
+        "--dir",
+        default=None,
+        help="批量扫描目录下的 task_*.md",
+    )
+    p_task_validate.add_argument(
+        "--format",
+        default="markdown",
+        choices=["json", "markdown"],
+        help="输出格式：markdown（默认）/ json",
+    )
+    p_task_validate.add_argument(
+        "--strict",
+        action="store_true",
+        help="将 completed 人闸状态视为非法",
+    )
+    p_task_validate.set_defaults(func=cmd_task_validate)
 
     p_safety = sub.add_parser("safety", help="安全策略与能力模型")
     safety_sub = p_safety.add_subparsers(dest="safety_command", required=True)

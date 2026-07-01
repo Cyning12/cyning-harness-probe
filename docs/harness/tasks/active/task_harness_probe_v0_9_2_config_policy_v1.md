@@ -10,7 +10,7 @@
 | **graph_delta** | `docs/_tech_graph/95_config.graph.yaml` |
 | **test_strategy** | `required` |
 | **failure_paths** | 见下方 |
-| **freeze_id** | 待执行后回填 |
+| **freeze_id** | `v0.9.5` |
 | **parent_id** | `v0.9.1` |
 | **risk** | `low` |
 

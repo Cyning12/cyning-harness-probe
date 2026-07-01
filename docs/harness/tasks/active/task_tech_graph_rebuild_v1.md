@@ -7,7 +7,7 @@
 | **track** | `refactor` |
 | **lightweight_task** | `yes` |
 | **module_id** | `TECH-GRAPH` |
-| **graph_delta** | `docs/_tech_graph/` 全量重建 |
+| **graph_delta** | `none`（本任务为文档重构，无单一 graph_delta 文件） |
 | **test_strategy** | `recommended` |
 | **freeze_id** | `HARNESS-PROBE-GRAPH-V3` |
 | **gates_before_code** | `["human_gate"]` |
