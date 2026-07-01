@@ -1,0 +1,5 @@
+default_plugin: subprocess
+plugins:
+  dry-run: harness_sdk.executor_plugins.dry_run:DryRunExecutor
+  preview: harness_sdk.executor_plugins.preview:PreviewExecutor
+  subprocess: harness_sdk.executor_plugins.subprocess:SubprocessExecutor

@@ -1,7 +1,7 @@
 {
   "schema_version": "graph_v2",
   "freeze_id": "HARNESS-PROBE-GRAPH-V2",
-  "generated_at": "2026-07-01T00:49:18.698051+00:00",
+  "generated_at": "2026-07-01T01:18:46.529688+00:00",
   "nodes": [
     {
       "id": "CLI",
@@ -270,6 +270,41 @@
       "graph_id": "probe"
     },
     {
+      "id": "VERIFY_EXECUTOR",
+      "label": "VerifyExecutor Protocol",
+      "kind": "data",
+      "module_id": "VERIFY_EXECUTOR",
+      "graph_id": "probe"
+    },
+    {
+      "id": "SUBPROCESS_PLUGIN",
+      "label": "SubprocessExecutor plugin",
+      "kind": "service",
+      "module_id": "SUBPROCESS_PLUGIN",
+      "graph_id": "probe"
+    },
+    {
+      "id": "DRYRUN_PLUGIN",
+      "label": "DryRunExecutor plugin",
+      "kind": "service",
+      "module_id": "DRYRUN_PLUGIN",
+      "graph_id": "probe"
+    },
+    {
+      "id": "PREVIEW_PLUGIN",
+      "label": "PreviewExecutor plugin",
+      "kind": "service",
+      "module_id": "PREVIEW_PLUGIN",
+      "graph_id": "probe"
+    },
+    {
+      "id": "LOADER",
+      "label": "load_executor_plugin",
+      "kind": "service",
+      "module_id": "LOADER",
+      "graph_id": "probe"
+    },
+    {
       "id": "SAFETY_CONFIG",
       "label": "SafetyConfig / SafetyMode",
       "kind": "data",
@@ -291,8 +326,15 @@
       "graph_id": "probe"
     },
     {
+      "id": "EXECUTOR_YAML",
+      "label": "config/executor.yaml",
+      "kind": "storage",
+      "module_id": "EXECUTOR_YAML",
+      "graph_id": "probe"
+    },
+    {
       "id": "CLI_ARGS",
-      "label": "--safety-config / --safety-mode",
+      "label": "--executor / --executor-plugin / --safety-*",
       "kind": "input",
       "module_id": "CLI_ARGS",
       "graph_id": "probe"
@@ -815,28 +857,147 @@
     {
       "from": "CLI_ARGS",
       "to": "EXECUTOR",
-      "mark": "传入安全参数",
+      "mark": "传入插件名与安全参数",
       "type": "depends_on",
-      "label": "传入安全参数",
+      "label": "传入插件名与安全参数",
       "graph_id": "probe",
       "anchors": [
         {
           "path": "harness_probe/cli.py",
           "symbol": "cmd_run"
+        },
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "build_parser"
         }
       ]
     },
     {
       "from": "EXECUTOR",
-      "to": "SAFETY",
-      "mark": "check(cmd)",
+      "to": "LOADER",
+      "mark": "load_executor_plugin",
       "type": "depends_on",
-      "label": "check(cmd)",
+      "label": "load_executor_plugin",
       "graph_id": "probe",
       "anchors": [
         {
-          "path": "harness_sdk/executor.py",
+          "path": "harness_sdk/executor_plugins/_loader.py",
+          "symbol": "load_executor_plugin"
+        }
+      ]
+    },
+    {
+      "from": "LOADER",
+      "to": "EXECUTOR_YAML",
+      "mark": "read config",
+      "type": "depends_on",
+      "label": "read config",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/_loader.py",
+          "symbol": "_load_executor_config"
+        }
+      ]
+    },
+    {
+      "from": "LOADER",
+      "to": "SUBPROCESS_PLUGIN",
+      "mark": "instantiate",
+      "type": "depends_on",
+      "label": "instantiate",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/subprocess.py",
+          "symbol": "SubprocessExecutor"
+        }
+      ]
+    },
+    {
+      "from": "LOADER",
+      "to": "DRYRUN_PLUGIN",
+      "mark": "instantiate",
+      "type": "depends_on",
+      "label": "instantiate",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/dry_run.py",
+          "symbol": "DryRunExecutor"
+        }
+      ]
+    },
+    {
+      "from": "LOADER",
+      "to": "PREVIEW_PLUGIN",
+      "mark": "instantiate",
+      "type": "depends_on",
+      "label": "instantiate",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/preview.py",
+          "symbol": "PreviewExecutor"
+        }
+      ]
+    },
+    {
+      "from": "VERIFY_EXECUTOR",
+      "to": "SUBPROCESS_PLUGIN",
+      "mark": "implements",
+      "type": "depends_on",
+      "label": "implements",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "VERIFY_EXECUTOR",
+      "to": "DRYRUN_PLUGIN",
+      "mark": "implements",
+      "type": "depends_on",
+      "label": "implements",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "VERIFY_EXECUTOR",
+      "to": "PREVIEW_PLUGIN",
+      "mark": "implements",
+      "type": "depends_on",
+      "label": "implements",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "SUBPROCESS_PLUGIN",
+      "to": "SAFETY",
+      "mark": "check(cmd) / preview(cmd)",
+      "type": "depends_on",
+      "label": "check(cmd) / preview(cmd)",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/subprocess.py",
           "symbol": "run"
+        },
+        {
+          "path": "harness_sdk/executor_plugins/subprocess.py",
+          "symbol": "preview"
+        }
+      ]
+    },
+    {
+      "from": "PREVIEW_PLUGIN",
+      "to": "SAFETY",
+      "mark": "preview(cmd)",
+      "type": "depends_on",
+      "label": "preview(cmd)",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/preview.py",
+          "symbol": "preview"
         }
       ]
     },
@@ -869,7 +1030,7 @@
       ]
     },
     {
-      "from": "EXECUTOR",
+      "from": "SUBPROCESS_PLUGIN",
       "to": "EXECUTION_LOG",
       "mark": "append JSONL",
       "type": "depends_on",
@@ -877,17 +1038,35 @@
       "graph_id": "probe",
       "anchors": [
         {
-          "path": "harness_sdk/executor.py",
+          "path": "harness_sdk/executor_plugins/subprocess.py",
           "symbol": "_log_event"
         }
       ]
     },
     {
-      "from": "EXECUTOR",
+      "from": "SUBPROCESS_PLUGIN",
       "to": "MODELS",
       "mark": "return ExecutionResult",
       "type": "depends_on",
       "label": "return ExecutionResult",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "DRYRUN_PLUGIN",
+      "to": "MODELS",
+      "mark": "return dry-run ExecutionResult",
+      "type": "depends_on",
+      "label": "return dry-run ExecutionResult",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "PREVIEW_PLUGIN",
+      "to": "MODELS",
+      "mark": "return preview ExecutionResult",
+      "type": "depends_on",
+      "label": "return preview ExecutionResult",
       "graph_id": "probe",
       "anchors": []
     }

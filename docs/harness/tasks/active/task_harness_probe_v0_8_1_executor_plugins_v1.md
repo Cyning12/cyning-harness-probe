@@ -69,20 +69,25 @@ v0.8.0 已完成沙箱预览与策略热重载。v0.8.1 目标是把当前硬编
 
 ## 验收标准
 
-- [ ] `VerifyExecutor` 协议定义清晰
-- [ ] `DryRunExecutor`、`PreviewExecutor`、`SubprocessExecutor` 都通过统一接口运行
-- [ ] CLI `--executor mock`/`real` 行为与 v0.8.0 一致
-- [ ] CLI `--executor-plugin dry-run` / `preview` / `subprocess` 可切换
-- [ ] `config/executor.yaml` 可配置默认插件
-- [ ] `pytest tests/ -q` 全绿
-- [ ] `ruff check .` 全绿
-- [ ] `mypy harness_sdk` 全绿
-- [ ] 图谱与 CHANGELOG 同步更新
-- [ ] 创建并推送 `task/v0-8-1-executor-plugins` 分支
+- [x] `VerifyExecutor` 协议定义清晰
+- [x] `DryRunExecutor`、`PreviewExecutor`、`SubprocessExecutor` 都通过统一接口运行
+- [x] CLI `--executor mock`/`real` 行为与 v0.8.0 一致
+- [x] CLI `--executor-plugin dry-run` / `preview` / `subprocess` 可切换
+- [x] `config/executor.yaml` 可配置默认插件
+- [x] `pytest tests/ -q` 全绿
+- [x] `ruff check .` 全绿
+- [x] `mypy harness_sdk` 全绿
+- [x] 图谱与 CHANGELOG 同步更新
+- [x] 创建并推送 `task/v0-8-1-executor-plugins` 分支
 
 ## 实现备忘
 
-- 待执行后回填
+- 已实现并提交到分支 `task/v0-8-1-executor-plugins`
+- 新增：`harness_sdk/executor_plugins/`（base, dry_run, preview, subprocess, _loader）
+- 新增：`config/executor.yaml`、`tests/test_executor_plugins.py`
+- 修改：`harness_sdk/executor.py`（兼容层）、`harness_probe/cli.py`（--executor-plugin 参数）、`CHANGELOG.md`、`pyproject.toml`、图谱
+- 验证：pytest 85 passed, ruff passed, mypy passed
+- 状态：待合并到 main，关闭并归档到 `docs/harness/tasks/done/`
 
 ## 测试策略
 

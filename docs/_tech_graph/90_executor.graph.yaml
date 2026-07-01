@@ -1,12 +1,27 @@
 graph_id: "90_executor"
-title: "真实执行器与安全校验"
-description: "SubprocessExecutor + CommandSafetyChecker + 执行日志"
-version: "2026-06-30"
+title: "执行器插件化"
+description: "VerifyExecutor 协议 + dry-run / preview / subprocess 插件 + 配置加载 + 安全校验"
+version: "2026-07-01"
 direction: "TD"
 
 nodes:
   - id: "EXECUTOR"
-    label: "SubprocessExecutor"
+    label: "executor.py / executor_plugins"
+    kind: service
+  - id: "VERIFY_EXECUTOR"
+    label: "VerifyExecutor Protocol"
+    kind: data
+  - id: "SUBPROCESS_PLUGIN"
+    label: "SubprocessExecutor plugin"
+    kind: service
+  - id: "DRYRUN_PLUGIN"
+    label: "DryRunExecutor plugin"
+    kind: service
+  - id: "PREVIEW_PLUGIN"
+    label: "PreviewExecutor plugin"
+    kind: service
+  - id: "LOADER"
+    label: "load_executor_plugin"
     kind: service
   - id: "SAFETY"
     label: "CommandSafetyChecker"
@@ -20,27 +35,78 @@ nodes:
   - id: "MODELS"
     label: "ExecutionResult"
     kind: data
-
   - id: "SAFETY_YAML"
     label: "config/safety.yaml"
     kind: storage
+  - id: "EXECUTOR_YAML"
+    label: "config/executor.yaml"
+    kind: storage
   - id: "CLI_ARGS"
-    label: "--safety-config / --safety-mode"
+    label: "--executor / --executor-plugin / --safety-*"
     kind: input
 
 edges:
   - from: "CLI_ARGS"
     to: "EXECUTOR"
-    label: "传入安全参数"
+    label: "传入插件名与安全参数"
     anchors:
       - path: "harness_probe/cli.py"
         symbol: "cmd_run"
+      - path: "harness_probe/cli.py"
+        symbol: "build_parser"
   - from: "EXECUTOR"
-    to: "SAFETY"
-    label: "check(cmd)"
+    to: "LOADER"
+    label: "load_executor_plugin"
     anchors:
-      - path: "harness_sdk/executor.py"
+      - path: "harness_sdk/executor_plugins/_loader.py"
+        symbol: "load_executor_plugin"
+  - from: "LOADER"
+    to: "EXECUTOR_YAML"
+    label: "read config"
+    anchors:
+      - path: "harness_sdk/executor_plugins/_loader.py"
+        symbol: "_load_executor_config"
+  - from: "LOADER"
+    to: "SUBPROCESS_PLUGIN"
+    label: "instantiate"
+    anchors:
+      - path: "harness_sdk/executor_plugins/subprocess.py"
+        symbol: "SubprocessExecutor"
+  - from: "LOADER"
+    to: "DRYRUN_PLUGIN"
+    label: "instantiate"
+    anchors:
+      - path: "harness_sdk/executor_plugins/dry_run.py"
+        symbol: "DryRunExecutor"
+  - from: "LOADER"
+    to: "PREVIEW_PLUGIN"
+    label: "instantiate"
+    anchors:
+      - path: "harness_sdk/executor_plugins/preview.py"
+        symbol: "PreviewExecutor"
+  - from: "VERIFY_EXECUTOR"
+    to: "SUBPROCESS_PLUGIN"
+    label: "implements"
+  - from: "VERIFY_EXECUTOR"
+    to: "DRYRUN_PLUGIN"
+    label: "implements"
+  - from: "VERIFY_EXECUTOR"
+    to: "PREVIEW_PLUGIN"
+    label: "implements"
+  - from: "SUBPROCESS_PLUGIN"
+    to: "SAFETY"
+    label: "check(cmd) / preview(cmd)"
+    anchors:
+      - path: "harness_sdk/executor_plugins/subprocess.py"
         symbol: "run"
+      - path: "harness_sdk/executor_plugins/subprocess.py"
+        symbol: "preview"
+  - from: "PREVIEW_PLUGIN"
+    to: "SAFETY"
+    label: "preview(cmd)"
+    anchors:
+      - path: "harness_sdk/executor_plugins/preview.py"
+        symbol: "preview"
   - from: "SAFETY_YAML"
     to: "SAFETY_CONFIG"
     label: "load_safety_config"
@@ -53,12 +119,18 @@ edges:
     anchors:
       - path: "harness_sdk/safety.py"
         symbol: "SafetyConfig"
-  - from: "EXECUTOR"
+  - from: "SUBPROCESS_PLUGIN"
     to: "EXECUTION_LOG"
     label: "append JSONL"
     anchors:
-      - path: "harness_sdk/executor.py"
+      - path: "harness_sdk/executor_plugins/subprocess.py"
         symbol: "_log_event"
-  - from: "EXECUTOR"
+  - from: "SUBPROCESS_PLUGIN"
     to: "MODELS"
     label: "return ExecutionResult"
+  - from: "DRYRUN_PLUGIN"
+    to: "MODELS"
+    label: "return dry-run ExecutionResult"
+  - from: "PREVIEW_PLUGIN"
+    to: "MODELS"
+    label: "return preview ExecutionResult"

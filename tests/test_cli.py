@@ -79,6 +79,58 @@ def test_cli_run_executor_real():
             assert "stderr" in ev
 
 
+def test_cli_run_executor_plugin_dry_run():
+    code = main([
+        "run",
+        "--task", SAMPLE_TASK,
+        "--executor-plugin", "dry-run",
+        "--from-hat", "30",
+        "--to-hat", "40",
+        "--quiet",
+    ])
+    assert code == 0
+    outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
+    assert outputs
+    run_graph = json.loads(outputs[-1].read_text(encoding="utf-8"))
+    assert run_graph["status"] == "done"
+    for node in run_graph["nodes"]:
+        evidence = json.loads(node["evidence"])
+        for row in evidence:
+            assert "dry-run" in row["evidence"]
+
+
+def test_cli_run_executor_plugin_subprocess():
+    code = main([
+        "run",
+        "--task", SAMPLE_TASK,
+        "--executor-plugin", "subprocess",
+        "--from-hat", "30",
+        "--to-hat", "40",
+        "--quiet",
+    ])
+    assert code == 0
+    outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
+    assert outputs
+    run_graph = json.loads(max(outputs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8"))
+    assert run_graph["status"] == "blocked"
+
+
+def test_cli_run_executor_plugin_preview():
+    code = main([
+        "run",
+        "--task", SAMPLE_TASK,
+        "--executor-plugin", "preview",
+        "--from-hat", "30",
+        "--to-hat", "40",
+        "--quiet",
+    ])
+    assert code == 0
+    outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
+    assert outputs
+    run_graph = json.loads(outputs[-1].read_text(encoding="utf-8"))
+    assert run_graph["status"] == "done"
+
+
 def test_cli_run_executor_real_max_retries_blocks():
     code = main([
         "run",

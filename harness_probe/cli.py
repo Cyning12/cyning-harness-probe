@@ -22,7 +22,12 @@ from harness_probe.io import (
 )
 from harness_probe.rendering import print_cache_boundary
 from harness_sdk import TaskRunner
-from harness_sdk.executor import SubprocessExecutor
+from harness_sdk.executor import (
+    DryRunExecutor,
+    PreviewExecutor,
+    SubprocessExecutor,
+    load_executor_plugin,
+)
 from harness_sdk.graph import query_subgraph
 from harness_sdk.safety import SafetyConfig, load_safety_config
 
@@ -179,6 +184,45 @@ def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str,
     return safety_config, safety_mode, execution_log_dir
 
 
+def _resolve_executor_plugin_name(args: argparse.Namespace) -> str:
+    """解析执行器插件名称。
+
+    优先级：--executor-plugin > --executor 兼容映射 > 配置文件 > 环境变量 > 默认。
+    """
+    if args.executor_plugin:
+        return args.executor_plugin
+    legacy_map = {"mock": "dry-run", "real": "subprocess"}
+    if args.executor in legacy_map:
+        return legacy_map[args.executor]
+    return "subprocess"
+
+
+def _build_executor(
+    plugin_name: str,
+    *,
+    safety_config: SafetyConfig,
+    safety_mode: str,
+    execution_log_dir: str | None,
+    dry_run: bool,
+) -> SubprocessExecutor | DryRunExecutor | PreviewExecutor:
+    """根据插件名称构造配置好的执行器实例。"""
+    if plugin_name == "subprocess":
+        return SubprocessExecutor(
+            safety_mode=safety_mode,
+            dry_run=dry_run,
+            execution_log_dir=execution_log_dir,
+            safety_config=safety_config,
+        )
+    if plugin_name == "dry-run":
+        return DryRunExecutor()
+    if plugin_name == "preview":
+        return PreviewExecutor(
+            safety_mode=safety_mode,
+            safety_config=safety_config,
+        )
+    return load_executor_plugin(plugin_name)
+
+
 def _preview_report_to_dict(report, ref: str) -> dict:
     data = asdict(report)
     data["ref"] = ref
@@ -224,9 +268,8 @@ def _generate_preview(
 ) -> tuple[list[dict], str]:
     """生成沙箱预览报告。返回 (reports, format)。"""
     safety_config, safety_mode, _ = _resolve_safety_params(args)
-    executor = SubprocessExecutor(
+    executor = PreviewExecutor(
         safety_mode=safety_mode,
-        dry_run=True,
         safety_config=safety_config,
     )
 
@@ -234,7 +277,7 @@ def _generate_preview(
     task = parse_task_markdown(task_path, dynamic_query=args.query or "")
     task = _apply_task_overrides(task, args)
 
-    # preview 与 executor 互不影响；若用户同时指定 --executor real，给出提示
+    # preview 与真实执行互不影响；若用户同时指定 --executor real，给出提示
     if args.executor == "real":
         warnings.warn(
             "--preview takes precedence over --executor real; no command will be executed",
@@ -269,13 +312,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     executor = None
-    if args.executor == "real":
+    plugin_name = _resolve_executor_plugin_name(args)
+    if plugin_name != "none":
         safety_config, safety_mode, execution_log_dir = _resolve_safety_params(args)
-        executor = SubprocessExecutor(
-            safety_mode=safety_mode,
-            dry_run=args.dry_run,
-            execution_log_dir=execution_log_dir,
+        executor = _build_executor(
+            plugin_name,
             safety_config=safety_config,
+            safety_mode=safety_mode,
+            execution_log_dir=execution_log_dir,
+            dry_run=args.dry_run,
         )
 
     cwd = None
@@ -382,6 +427,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="mock",
         choices=["mock", "real"],
         help="执行器类型：mock 为 dry-run（默认），real 真实执行 contract.verify",
+    )
+    p_run.add_argument(
+        "--executor-plugin",
+        default=None,
+        choices=["dry-run", "preview", "subprocess"],
+        help="插件化执行器：dry-run / preview / subprocess",
     )
     p_run.add_argument(
         "--max-retries",
