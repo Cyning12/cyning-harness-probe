@@ -17,8 +17,8 @@
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
 | HG-TASK-DRAFT | `approved` | 30 | 任务单已定稿 |
-| HG-AUDIT-R1 | `approved` | 30 | R1 审计通过：v0.8.1 是 v0.9.0 和 v0.8.2 的前置依赖，范围清晰 |
-| HG-EXEC-AUTH | `approved` | 30 | 已授权 30 改码，可派工 Claude Code |
+| HG-AUDIT-R1 | `approved` | 30 | R1 审计通过 |
+| HG-EXEC-AUTH | `approved` | 30 | 已执行并合并到 main |
 
 ## 背景与目标
 
@@ -87,7 +87,7 @@ v0.8.0 已完成沙箱预览与策略热重载。v0.8.1 目标是把当前硬编
 - 新增：`config/executor.yaml`、`tests/test_executor_plugins.py`
 - 修改：`harness_sdk/executor.py`（兼容层）、`harness_probe/cli.py`（--executor-plugin 参数）、`CHANGELOG.md`、`pyproject.toml`、图谱
 - 验证：pytest 85 passed, ruff passed, mypy passed
-- 状态：待合并到 main，关闭并归档到 `docs/harness/tasks/done/`
+- 状态：已合并到 main（commit 88beffb），关闭并归档到 `docs/harness/tasks/done/`
 
 ## 测试策略
 
