@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 import warnings
 from dataclasses import asdict
 from pathlib import Path
@@ -20,8 +21,9 @@ from harness_probe.io import (
     persist_run_graph,
     validate_task_markdown,
 )
-from harness_probe.rendering import print_cache_boundary
 from harness_sdk import ConfigError, ConfigManager, TaskRunner
+from harness_sdk.audit import AuditLogger, AuditReader, AuditReport
+from harness_sdk.audit.events import CompileEvent, RunEvent, VerifyEvent
 from harness_sdk.executor import (
     DryRunExecutor,
     PreviewExecutor,
@@ -33,17 +35,89 @@ from harness_sdk.graph import query_subgraph
 from harness_sdk.safety import SafetyConfig, load_safety_config
 
 
+def _audit_logger() -> AuditLogger:
+    return AuditLogger()
+
+
+def _log_run_event(
+    run_id: str,
+    task_path: str,
+    hats: list[str],
+    executor_plugin: str | None,
+    result_status: str,
+    duration_ms: int,
+) -> None:
+    logger = _audit_logger()
+    logger.log_event(
+        RunEvent(
+            run_id=run_id,
+            task=str(task_path),
+            hat=",".join(hats) if hats else None,
+            executor_plugin=executor_plugin,
+            commands=[],
+            result=result_status,
+            duration_ms=duration_ms,
+        )
+    )
+
+
+def _log_verify_event(
+    run_id: str,
+    task_path: str,
+    verifier: str,
+    result: str,
+) -> None:
+    logger = _audit_logger()
+    logger.log_event(
+        VerifyEvent(
+            run_id=run_id,
+            task=str(task_path),
+            verifier=verifier,
+            result=result,
+        )
+    )
+
+
+def _log_compile_event(
+    run_id: str,
+    task_path: str,
+    output_summary: str,
+) -> None:
+    logger = _audit_logger()
+    logger.log_event(
+        CompileEvent(
+            run_id=run_id,
+            task=str(task_path),
+            output=output_summary,
+        )
+    )
+
+
+def _audit_enabled(args: argparse.Namespace) -> bool:
+    return not getattr(args, "no_audit", False)
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _load_config() -> dict:
+    cfg_path = _repo_root() / "config" / "probe_config.yaml"
+    if not cfg_path.exists():
+        return {}
+    return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """PRE_SPAWN_VERIFY：校验 task 人闸与 Harness 规则，不生成 Prompt。"""
+    run_id = uuid.uuid4().hex
     task_path = Path(args.task)
     if not task_path.is_absolute():
         task_path = _repo_root() / task_path
     if not task_path.is_file():
         print(f"BLOCKED: file not found: {task_path}", file=sys.stderr)
+        if _audit_enabled(args):
+            _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "fail")
         return 2
 
     errors = validate_task_markdown(task_path)
@@ -52,6 +126,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
         for err in errors:
             print(f"[ERROR] {err}")
         print("BLOCKED")
+        if _audit_enabled(args):
+            _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "fail")
         return 1
 
     task = parse_task_markdown(task_path)
@@ -59,17 +135,20 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"=== {task_path.relative_to(_repo_root())} ===")
         print("[ERROR] HG-AUDIT-R1 pending but blocks 30 · 禁止派工 30")
         print("BLOCKED")
+        if _audit_enabled(args):
+            _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "fail")
         return 1
 
     print(f"=== {task_path.relative_to(_repo_root())} ===")
     print("OK · PRE_SPAWN_VERIFY pass")
+    if _audit_enabled(args):
+        _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "pass")
     return 0
 
 
 def _resolve_path(arg: str | None, cfg_key: str) -> Path:
-    cfg = ConfigManager.default(project_root=str(_repo_root()))
-    value = arg or cfg.get(f"harness.probe.{cfg_key}", "")
-    path = Path(value)
+    cfg = _load_config()
+    path = Path(arg or cfg.get("probe", {}).get(cfg_key, ""))
     if not path.is_absolute():
         path = _repo_root() / path
     return path
@@ -85,43 +164,38 @@ def _build_task_from_args(args: argparse.Namespace) -> tuple[Path, Path]:
 
 def _apply_task_overrides(task, args: argparse.Namespace):
     if args.entry:
-        task = task.model_copy(update={"entry_node": args.entry})
+        task.entry_node = args.entry
     if args.hat:
-        task = task.model_copy(update={"planned_hats": args.hat.split(",")})
+        task.planned_hats = [h.strip() for h in args.hat.split(",")]
     if args.spec:
-        spec_path = Path(args.spec)
-        if not spec_path.is_absolute():
-            spec_path = _repo_root() / spec_path
-        spec_text = spec_path.read_text(encoding="utf-8") if spec_path.exists() else ""
-        task = task.model_copy(update={"spec_path": str(args.spec), "spec_text": spec_text})
+        task.spec_path = args.spec
     if args.review_target:
-        task = task.model_copy(update={"review_target": args.review_target})
+        task.review_target = args.review_target
     if args.run_output:
-        task = task.model_copy(update={"run_output_path": args.run_output})
+        task.run_output = args.run_output
     if args.mode:
-        task = task.model_copy(update={"reinspect_mode": args.mode})
+        task.mode = args.mode
+    if args.query:
+        task.dynamic_query = args.query
     return task
 
 
-def _persist_run_outputs(
-    runner: TaskRunner,
-    run_graph,
-    output_dir: Path,
-    show_prompt: bool,
-) -> None:
-    session_id = run_graph.session_id
-    for hat, compiled in runner.get_last_prompts().items():
-        prompt_path = output_dir / f"prompt_{session_id}_hat{hat}.md"
-        persist_prompt(prompt_path, compiled)
-        if show_prompt:
-            print(f"\n--- hat {hat} · {prompt_path} ---")
-            print_cache_boundary(compiled)
-
-    run_path = output_dir / f"task_run_{session_id}.json"
-    persist_run_graph(run_path, run_graph)
+def _persist_run_outputs(runner, run_result, output_dir: Path, *, show_prompt: bool = True) -> None:
+    """持久化 run/compile 输出：prompt 文件与 task_run JSON。"""
+    compiled_prompts = runner.get_last_prompts()
+    for ref, compiled in compiled_prompts.items():
+        persist_prompt(output_dir / f"prompt_{ref}.md", compiled)
+    if run_result.session_id:
+        persist_run_graph(output_dir / f"task_run_{run_result.session_id}.json", run_result)
+    if show_prompt:
+        for ref, compiled in compiled_prompts.items():
+            print(f"\n--- {ref} ---")
+            print(compiled.full_text)
+            print(f"[static: {compiled.static_char_count}, dynamic: {compiled.dynamic_char_count}]")
 
 
 def cmd_compile(args: argparse.Namespace) -> int:
+    run_id = uuid.uuid4().hex
     graph_path, task_path = _build_task_from_args(args)
 
     graph = load_graph(graph_path)
@@ -136,6 +210,9 @@ def cmd_compile(args: argparse.Namespace) -> int:
     run_graph = runner.run_sequence()
     _persist_run_outputs(runner, run_graph, output_dir, show_prompt=not args.quiet)
     print("\n✅ compile 完成 · 见 outputs/prompt_*.md 与 task_run_*.json")
+    if _audit_enabled(args):
+        output_summary = str(output_dir / f"task_run_{run_graph.session_id}.json")
+        _log_compile_event(run_id, str(task_path), output_summary)
     return 0
 
 
@@ -343,15 +420,27 @@ def cmd_run(args: argparse.Namespace) -> int:
         cwd = str(cwd_path.resolve())
 
     runner = TaskRunner(task, graph, load_wiki_stub(wiki_path), executor=executor, cwd=cwd)
+    start = time.time()
     run_result = runner.run_sequence(
         from_hat=args.from_hat,
         to_hat=args.to_hat,
         max_retries=args.max_retries,
     )
+    duration_ms = int((time.time() - start) * 1000)
     _persist_run_outputs(runner, run_result, output_dir, show_prompt=not args.quiet)
     print(f"\n✅ run 完成 · session={run_result.session_id} · status={run_result.status}")
     print(f"   nodes: {[(n.hat, n.status.value) for n in run_result.nodes]}")
     print(f"   见 outputs/prompt_*.md 与 outputs/task_run_{run_result.session_id}.json")
+    if _audit_enabled(args):
+        hats = [n.hat for n in run_result.nodes]
+        _log_run_event(
+            run_id=run_result.session_id,
+            task_path=str(task_path),
+            hats=hats,
+            executor_plugin=plugin_name,
+            result_status=str(run_result.status),
+            duration_ms=duration_ms,
+        )
     return 0
 
 
@@ -361,42 +450,103 @@ def cmd_watch(args: argparse.Namespace) -> int:
     task_path = Path(args.task)
     if not task_path.is_absolute():
         task_path = _repo_root() / task_path
-    interval = args.interval
+    snapshot = load_graph(graph_path)
+    baseline = {node.id: node.freeze_id for node in snapshot.nodes}
 
-    while True:
-        graph = load_graph(graph_path)
-        task = parse_task_markdown(task_path)
-        graph_freeze = graph.freeze_id
-        task_freeze = task.freeze_id or "（未设置）"
-        consistent = graph_freeze == task_freeze
+    if args.once:
+        drift = _detect_drift(baseline, task_path)
+        if drift:
+            print("DRIFT detected:", drift)
+            return 1
+        print("OK · no drift")
+        return 0
 
-        impacted = []
-        if not consistent and args.entry:
-            sub = query_subgraph(graph, args.entry, depth=1)
-            impacted = sub.node_ids
+    try:
+        while True:
+            drift = _detect_drift(baseline, task_path)
+            if drift:
+                print("DRIFT:", drift)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print("\nwatch stopped")
+        return 0
 
-        print(f"[{time.strftime('%H:%M:%S')}] "
-              f"graph={graph_freeze} task={task_freeze} "
-              f"{'✅ 一致' if consistent else '⚠️ 漂移'}")
-        if not consistent:
-            print(f"    影响节点: {', '.join(impacted) if impacted else '(未指定 --entry)'}")
-            print(f"    建议: harness verify --impact {args.entry or '?'}")
 
-        if args.once:
-            return 0 if consistent else 1
-
-        time.sleep(interval)
+def _detect_drift(baseline: dict[str, str], task_path: Path) -> list[str]:
+    """比对当前任务文件中的 freeze_id 与基线。"""
+    if not task_path.is_file():
+        return [f"task file missing: {task_path}"]
+    task = parse_task_markdown(task_path)
+    drift: list[str] = []
+    for node in task.required_nodes:
+        current = node.freeze_id
+        expected = baseline.get(node.id)
+        if expected and current != expected:
+            drift.append(f"{node.id}: {expected} -> {current}")
+    return drift
 
 
 def cmd_mcp(args: argparse.Namespace) -> int:
     """启动 MCP Server。"""
-    from harness_mcp.server import main as mcp_main
+    try:
+        from harness_probe.mcp.server import run_server
+    except ImportError as exc:
+        print(f"MCP server not available: {exc}", file=sys.stderr)
+        return 2
+    return run_server(args)
 
-    return mcp_main([
-        "--config", args.config or "",
-        "--transport", args.transport,
-        "--port", str(args.port),
-    ])
+
+def cmd_audit_list(args: argparse.Namespace) -> int:
+    reader = AuditReader()
+    runs = reader.list_runs(
+        task=args.task,
+        hat=args.hat,
+        executor_plugin=args.executor_plugin,
+        since=args.since,
+        limit=args.limit,
+    )
+    if not runs:
+        print("No audit runs found.")
+        return 0
+    for run in runs:
+        print(f"{run['run_id']}\t{run.get('event_type', '-')}\t{run['task']}\t{run['hat'] or '-'}\t{run['result']}")
+    return 0
+
+
+def cmd_audit_show(args: argparse.Namespace) -> int:
+    reader = AuditReader()
+    run = reader.get_run(args.run_id)
+    if run is None:
+        print(f"audit run not found: {args.run_id}", file=sys.stderr)
+        return 1
+    print(json.dumps(run, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_audit_report(args: argparse.Namespace) -> int:
+    reader = AuditReader()
+    report = AuditReport(
+        reader=reader,
+        task=args.task,
+        since=args.since,
+    )
+    text = report.to_json() if args.format == "json" else report.to_markdown()
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        print(f"audit report written to {args.output}")
+    else:
+        print(text)
+    return 0
+
+
+def cmd_audit_config(args: argparse.Namespace) -> int:
+    cfg = ConfigManager.default(project_root=str(_repo_root()))
+    logger = AuditLogger(config=cfg)
+    print(json.dumps({
+        "log_dir": str(logger.get_log_dir()),
+        "retention": cfg.get("harness.audit.retention", {}),
+    }, indent=2, ensure_ascii=False))
+    return 0
 
 
 def _render_config_markdown(cfg: ConfigManager) -> str:
@@ -462,6 +612,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_verify = sub.add_parser("verify", help="PRE_SPAWN_VERIFY · 校验 task 人闸与规则")
     p_verify.add_argument("--task", default="data/tasks/sample_task.md")
+    p_verify.add_argument("--no-audit", action="store_true", help="禁用审计日志")
     p_verify.set_defaults(func=cmd_verify)
 
     p_compile = sub.add_parser("compile", help="编译 Prompt + L1.5 快照（dry-run）")
@@ -475,6 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_compile.add_argument("--mode", default=None, choices=["independent", "global"], help="50-reinspect 模式")
     p_compile.add_argument("--query", default=None)
     p_compile.add_argument("--quiet", action="store_true")
+    p_compile.add_argument("--no-audit", action="store_true", help="禁用审计日志")
     p_compile.set_defaults(func=cmd_compile)
 
     p_run = sub.add_parser("run", help="模拟执行多帽序列（dry-run）")
@@ -558,8 +710,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--safety-reload",
         action="store_true",
-        help="在构建 executor 前重新加载 --safety-config 指定的策略文件",
+        help="运行时重新加载安全策略文件",
     )
+    p_run.add_argument("--no-audit", action="store_true", help="禁用审计日志")
     p_run.add_argument(
         "--preview",
         action="store_true",
@@ -592,6 +745,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_mcp.add_argument("--transport", default="stdio", choices=["stdio", "sse"], help="MCP transport")
     p_mcp.add_argument("--port", type=int, default=8080, help="SSE port")
     p_mcp.set_defaults(func=cmd_mcp)
+
+    p_audit = sub.add_parser("audit", help="审计日志管理")
+    audit_sub = p_audit.add_subparsers(dest="audit_command", required=True)
+
+    p_audit_list = audit_sub.add_parser("list", help="列出历史运行")
+    p_audit_list.add_argument("--task", default=None, help="按 task 路径过滤")
+    p_audit_list.add_argument("--hat", default=None, help="按 hat 过滤")
+    p_audit_list.add_argument("--executor-plugin", default=None, help="按执行器插件过滤")
+    p_audit_list.add_argument("--since", default=None, help="按时间过滤（ISO 日期或相对时间如 1d, 7d）")
+    p_audit_list.add_argument("--limit", type=int, default=20, help="限制数量，默认 20")
+    p_audit_list.set_defaults(func=cmd_audit_list)
+
+    p_audit_show = audit_sub.add_parser("show", help="显示单次运行详情")
+    p_audit_show.add_argument("--run-id", required=True, help="运行 ID")
+    p_audit_show.set_defaults(func=cmd_audit_show)
+
+    p_audit_report = audit_sub.add_parser("report", help="生成审计报告")
+    p_audit_report.add_argument("--task", default=None, help="按 task 过滤")
+    p_audit_report.add_argument("--since", default=None, help="按时间过滤")
+    p_audit_report.add_argument("--format", default="markdown", choices=["json", "markdown"], help="报告格式")
+    p_audit_report.add_argument("--output", default=None, help="输出文件，默认 stdout")
+    p_audit_report.set_defaults(func=cmd_audit_report)
+
+    p_audit_config = audit_sub.add_parser("config", help="显示审计配置")
+    p_audit_config.set_defaults(func=cmd_audit_config)
 
     p_config = sub.add_parser("config", help="配置中心")
     config_sub = p_config.add_subparsers(dest="config_command", required=True)
