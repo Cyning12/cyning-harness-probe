@@ -25,3 +25,4 @@
 | 2026-06-29 | v1 · 手工创建 8 节点 13 边（.ai.md 单文件真值） |
 | 2026-06-30 | v2 · 迁移为 `.graph.yaml` + `.md` 双轨；同步 v0.5 模块结构（harness_sdk / harness_probe / harness_mcp） |
 | 2026-06-30 | v3 · 删除 `.ai.md`；新增 `00_main` / `01_struct` / `02_version` / `90_executor` / `85_mcp`；同步 v0.7 安全执行器与 MCP |
+| 2026-07-01 | v4 · 同步 v0.8.1 执行器插件化：VerifyExecutor 协议、dry-run/preview/subprocess 插件、config/executor.yaml |

@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.8.1 · 2026-07-01
+
+### Added
+
+- **执行器插件化（8.3）**：`harness_sdk/executor_plugins/` 新增插件体系。
+  - 定义 `VerifyExecutor` 协议：`run()` / `supports()` / `describe()`。
+  - `DryRunExecutor`：不执行命令，返回 `[dry-run] <cmd>`。
+  - `PreviewExecutor`：不执行命令，返回命令沙箱预览报告。
+  - `SubprocessExecutor` 迁移为插件，保留原有安全校验、超时、日志功能。
+  - 新增 `load_executor_plugin(name)` 工厂，支持 `config/executor.yaml` 与 `HARNESS_EXECUTOR_PLUGIN` 环境变量。
+- **CLI 插件集成**：`harness_probe/cli.py` 新增 `--executor-plugin {dry-run,preview,subprocess}`。
+  - 保留 `--executor {mock,real}` 向后兼容：`mock` 映射到 `dry-run`，`real` 映射到 `subprocess`。
+  - 插件解析优先级：`--executor-plugin` > `--executor` 兼容映射 > `config/executor.yaml` > `HARNESS_EXECUTOR_PLUGIN` > 默认 `subprocess`。
+- **默认执行器配置**：新增 `config/executor.yaml`，可配置 `default_plugin` 与自定义插件类映射。
+
+### Changed
+
+- `harness_sdk/executor.py` 改为兼容层，继续导出 `SubprocessExecutor` / `VerifyExecutor` 等 public API，内部委托给插件实现。
+- `--preview` 模式改用 `PreviewExecutor` 插件生成沙箱报告，行为与 v0.8.0 一致。
+
+### Fixed
+
+- 未知插件名抛出 `ExecutorPluginError`，CLI 统一退出码 2。
+- 插件配置损坏时回退到默认 `subprocess` 并发出警告。
+
 ## v0.8.0 · 2026-06-30
 
 ### Added
