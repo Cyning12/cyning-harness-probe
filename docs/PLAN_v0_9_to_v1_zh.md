@@ -15,6 +15,7 @@
 | v0.9.0 | CI 集成与 GitHub Actions | 提供可复用 action、workflow 模板与远程仓库验证 |
 | v0.9.1 | 日志审计与报告 | 执行日志查询、审计摘要、安全报告导出 |
 | v0.9.2 | 配置与策略增强 | 多环境配置、策略继承、YAML schema 校验 |
+| v0.9.9 / pre-1.0.0 | LLM Provider 集成验证 | 接入 OpenAI/Anthropic/本地模型，在真实项目中验证但不发布 |
 | v1.0.0 | 生产就绪 | 稳定 API、完整文档、性能基线、回滚策略、正式发布 |
 
 ---
@@ -79,6 +80,33 @@
 - YAML schema 校验：`SafetyConfig` 的 pydantic 模型化
 - 配置热重载增强：支持 watch 多个文件
 
+### v0.9.9 / pre-1.0.0 · LLM Provider 集成验证（P0）
+
+> 目标：在 v1.0.0 正式发布前，先接入真实 LLM 并在 cyning-harness / 后端真实项目中验证，不对外发布 tag。
+
+- 新增 `harness_sdk/llm/` Provider 体系：
+  - `base.py`: `LLMProvider` 协议（`generate(prompt, config) -> LLMResponse`）
+  - `openai_provider.py`: OpenAI / 兼容 API
+  - `anthropic_provider.py`: Anthropic Messages API
+  - `local_provider.py`: 本地 llama.cpp / vLLM / Ollama（OpenAI 兼容 endpoint）
+- 新增 `harness_sdk/executor_plugins/llm_executor.py`：
+  - 将 contract verify 命令作为 prompt 提交给 LLM
+  - 解析 LLM 返回的 `pass/fail` 与理由
+  - 不默认启用，需显式 `--executor-plugin llm` 或 `config/executor.yaml`
+- 配置：`config/llm.yaml` 包含 model、provider、temperature、max_tokens、timeout
+- 可选依赖：`pip install -e ".[llm]"` 安装 `openai`、`anthropic`
+- 集成验证场景：
+  - **cyning-harness 产品仓**：用 LLM Executor 自动判断验收合同是否通过
+  - **ai-ink-brain-api-python 后端**：用 LLM 自动生成 contract verify 命令，再经沙箱执行
+- 不发布 GitHub Release，仅打内部 tag `v0.9.9-rcX` 供验证
+
+### v1.0.0 前的发布冻结标准
+
+- v0.9.9 在至少 2 个真实项目中运行 2 周无 P0/P1 bug
+- LLM 调用成本、延迟、token 限制经过评估
+- 审计日志覆盖所有 LLM 调用
+- 决定是否将 LLM Executor 作为 v1.0.0 默认组件或可选组件
+
 ---
 
 ## 四、v1.0.0 生产就绪
@@ -113,7 +141,8 @@ v1.0.0 意味着：
 3. **v0.8.2** 沙箱原型（依赖插件体系）
 4. **v0.9.1** 日志审计（依赖执行器统一日志格式）
 5. **v0.9.2** 配置增强（策略继承需要插件化配置加载）
-6. **v1.0.0** 生产就绪收尾
+6. **v0.9.9 / pre-1.0.0** LLM Provider 集成验证（在真实项目中验证，不发布）
+7. **v1.0.0** 生产就绪发布
 
 ---
 
