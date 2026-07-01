@@ -1,4 +1,4 @@
-# Harness Probe 安全策略配置示例（v0.7.1）
+# Harness Probe 安全策略配置示例（v0.9.4）
 #
 # 加载方式：
 #   python -m harness_probe.cli run \
@@ -11,6 +11,7 @@
 # - allowed_commands：追加到默认白名单
 # - dangerous_metacharacters / dangerous_prefixes：追加到默认黑名单
 # - 危险前缀（rm/sudo/curl 等）不可被覆盖；尝试覆盖会触发 UserWarning
+# - capabilities：完全替换默认能力集（精确控制沙箱权限）
 
 mode: whitelist
 
@@ -31,3 +32,14 @@ dangerous_prefixes: []
 
 # 单条命令最大长度（字符）
 max_command_length: 1024
+
+# 沙箱能力集（默认：[read, execute]）
+# 显式声明后完全替换默认值；示例：启用 network 与 shell
+# capabilities:
+#   - read
+#   - execute
+#   - network
+#   - shell
+capabilities:
+  - read
+  - execute

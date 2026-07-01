@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from harness_probe.cli import build_parser
+from harness_sdk.capability import Capability, CapabilitySet
 from harness_sdk.executor import load_executor_plugin
 from harness_sdk.executor_plugins.docker import DockerExecutor
 from harness_sdk.executor_plugins.firejail import FirejailExecutor
@@ -103,6 +104,10 @@ def test_cli_sandbox_args_parsed():
             "--sandbox-no-network",
             "--sandbox-memory",
             "256m",
+            "--capability",
+            "network",
+            "--capability",
+            "write",
         ]
     )
     assert args.executor_plugin == "docker"
@@ -110,3 +115,46 @@ def test_cli_sandbox_args_parsed():
     assert args.sandbox_timeout == 30.0
     assert args.sandbox_no_network is True
     assert args.sandbox_memory == "256m"
+    assert args.capability == ["network", "write"]
+
+
+def test_docker_executor_capabilities_affect_network():
+    executor = DockerExecutor(network=True, capabilities=CapabilitySet(["read", "execute"]))
+    assert Capability.network not in executor.config.capabilities
+    assert executor.config.network is True  # config.network 保持原值，run() 时 capability 优先
+
+
+def test_docker_executor_sudo_capability_rejected():
+    with pytest.raises(SandboxConfigError, match="sudo capability is prohibited"):
+        DockerExecutor(capabilities=["sudo"])
+
+
+def test_firejail_executor_sudo_capability_rejected():
+    if sys.platform != "linux":
+        pytest.skip("firejail is Linux only")
+    with pytest.raises(SandboxConfigError, match="sudo capability is prohibited"):
+        FirejailExecutor(capabilities=["sudo"])
+
+
+def test_sandbox_executor_describe_includes_capabilities():
+    executor = DockerExecutor(capabilities=["read", "network"])
+    desc = executor.describe()
+    assert "network" in desc
+    assert "read" in desc
+
+
+def test_sandbox_config_from_dict_capabilities():
+    from harness_sdk.executor_plugins.sandbox import SandboxConfig
+
+    cfg = SandboxConfig.from_dict({"capabilities": ["read", "write", "network"]})
+    assert Capability.read in cfg.capabilities
+    assert Capability.write in cfg.capabilities
+    assert Capability.network in cfg.capabilities
+
+
+def test_default_sandbox_config_has_default_capabilities():
+    from harness_sdk.executor_plugins.sandbox import SandboxConfig
+
+    cfg = SandboxConfig()
+    assert Capability.read in cfg.capabilities
+    assert Capability.execute in cfg.capabilities

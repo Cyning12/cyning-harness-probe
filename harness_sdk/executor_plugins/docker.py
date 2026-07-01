@@ -1,4 +1,4 @@
-"""Docker sandbox executor plugin."""
+"""Docker executor plugin."""
 
 from __future__ import annotations
 
@@ -7,16 +7,23 @@ import re
 import shutil
 import time
 import uuid
+import warnings
 from pathlib import Path
 
+from harness_sdk.audit.events import CapabilityAuditEvent
+from harness_sdk.audit.logger import AuditLogger
+from harness_sdk.capability import Capability
 from harness_sdk.executor_plugins.sandbox import SandboxConfigError, SandboxExecutor
 from harness_sdk.models import ExecutionResult
-
 
 class DockerExecutor(SandboxExecutor):
     """使用 ``docker run`` 在临时容器内执行命令。
 
     不依赖 ``docker`` Python SDK，仅要求宿主机已安装 Docker CLI 且守护进程可达。
+    根据 ``capabilities`` 决定容器网络与挂载策略：
+    - ``network`` 能力缺失时强制 ``--network none``
+    - ``read`` 能力缺失时不挂载工作目录
+    - ``write`` 能力缺失时以只读方式挂载工作目录
     """
 
     async def run(
@@ -27,23 +34,48 @@ class DockerExecutor(SandboxExecutor):
     ) -> ExecutionResult:
         docker_bin = shutil.which("docker")
         if not docker_bin:
+            # Docker 未安装且请求 network 能力时降级为 network=none 并继续尝试
+            if Capability.network in self.config.capabilities:
+                warnings.warn(
+                    "Docker not installed; network capability will be unavailable",
+                    stacklevel=2,
+                )
             raise SandboxConfigError(
                 "Docker not installed. Install Docker and ensure 'docker' is in PATH."
             )
 
         container_name = self._make_container_name(session_id)
         args = [docker_bin, "run", "--rm", "--name", container_name]
-        if not self.config.network:
+
+        # 网络策略：以 capability 为准
+        if Capability.network not in self.config.capabilities:
             args.extend(["--network", "none"])
+        elif self.config.network:
+            args.extend(["--network", "host"])
+
         args.extend(["--memory", self.config.memory])
         args.extend(["--cpus", str(self.config.cpu)])
 
         workdir: str | None = None
         if cwd:
             workdir = "/work"
-            args.extend(["-v", f"{Path(cwd).resolve()}:{workdir}", "-w", workdir])
+            host_path = Path(cwd).resolve()
+            if Capability.read not in self.config.capabilities:
+                # 无 read 能力时不挂载工作目录
+                workdir = None
+            elif Capability.write not in self.config.capabilities:
+                args.extend(["-v", f"{host_path}:{workdir}:ro", "-w", workdir])
+            else:
+                args.extend(["-v", f"{host_path}:{workdir}", "-w", workdir])
 
         args.extend([self.config.image, "sh", "-c", cmd])
+
+        self._audit(
+            session_id=session_id,
+            cmd=cmd,
+            docker_args=args,
+            granted=self.config.capabilities.to_list(),
+        )
 
         started = time.perf_counter()
         proc: asyncio.subprocess.Process | None = None
@@ -113,4 +145,30 @@ class DockerExecutor(SandboxExecutor):
             )
             await asyncio.wait_for(proc.wait(), timeout=10.0)
         except Exception:
+            pass
+
+    def _audit(
+        self,
+        *,
+        session_id: str | None,
+        cmd: str,
+        docker_args: list[str],
+        granted: list[str],
+    ) -> None:
+        """执行前写入 CapabilityAuditEvent。"""
+        try:
+            logger = AuditLogger()
+            logger.log_event(
+                CapabilityAuditEvent(
+                    run_id=session_id or uuid.uuid4().hex,
+                    task="docker-sandbox-execution",
+                    hat="30",
+                    executor_plugin="docker",
+                    cmd=cmd,
+                    granted_capabilities=granted,
+                    sandbox_args=docker_args,
+                )
+            )
+        except Exception:
+            # 审计失败不应阻塞执行
             pass

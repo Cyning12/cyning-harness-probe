@@ -1,4 +1,4 @@
-"""CLI 安全策略配置测试。"""
+"""CLI safety / capability tests."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from harness_probe.cli import main
-from harness_sdk.executor import SubprocessExecutor
+from harness_sdk.executor_plugins.subprocess import SubprocessExecutor
 from harness_sdk.safety import SafetyConfigError, load_safety_config
 
 
@@ -350,3 +350,107 @@ def test_safety_config_reload_updates_whitelist(tmp_path):
     assert cfg.reload() is True
     assert "second-cmd" in cfg.allowed_commands
     assert "first-cmd" not in cfg.allowed_commands
+
+
+def test_cli_safety_show_markdown(runner):
+    """harness-probe safety show 输出当前策略。"""
+    ret, output = _capture_stdout(["safety", "show"])
+    assert ret == 0
+    assert "当前安全策略" in output
+    assert "read" in output
+    assert "execute" in output
+
+
+def test_cli_safety_show_json(runner):
+    """harness-probe safety show --format json 输出 JSON。"""
+    ret, output = _capture_stdout(["safety", "show", "--format", "json"])
+    assert ret == 0
+    data = json.loads(output)
+    assert data["mode"] == "whitelist"
+    assert "read" in data["capabilities"]
+    assert "execute" in data["capabilities"]
+
+
+def test_cli_safety_evaluate_safe(runner):
+    """harness-probe safety evaluate 返回 safe。"""
+    ret, output = _capture_stdout(["safety", "evaluate", "echo hello"])
+    assert ret == 0
+    data = json.loads(output)
+    assert data["cmd"] == "echo hello"
+    assert data["risk"] == "safe"
+    assert "read" in data["required_capabilities"]
+    assert data["missing_capabilities"] == []
+
+
+def test_cli_safety_evaluate_blocked_missing_network(runner):
+    """harness-probe safety evaluate 对 curl 返回 blocked。"""
+    ret, output = _capture_stdout(["safety", "evaluate", "curl https://example.com"])
+    assert ret == 0
+    data = json.loads(output)
+    assert data["risk"] == "blocked"
+    assert "network" in data["missing_capabilities"]
+
+
+def test_cli_safety_evaluate_with_extra_capability(runner):
+    """--capability network 使 curl 评估为 dangerous。"""
+    ret, output = _capture_stdout(
+        [
+            "safety",
+            "evaluate",
+            "--capability",
+            "network",
+            "curl https://example.com",
+        ]
+    )
+    assert ret == 0
+    data = json.loads(output)
+    assert data["risk"] == "dangerous"
+    assert "network" in data["granted_capabilities"]
+
+
+def test_load_safety_config_with_capabilities(tmp_path):
+    """safety.yaml 支持 capabilities 字段。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text(
+        "mode: whitelist\ncapabilities:\n  - read\n  - execute\n  - network\n",
+        encoding="utf-8",
+    )
+    cfg = load_safety_config(config)
+    assert "network" in cfg.capabilities.to_list()
+    assert "sudo" not in cfg.capabilities.to_list()
+
+
+def test_load_safety_config_missing_capabilities_uses_default(tmp_path):
+    """safety.yaml 缺少 capabilities 字段时使用默认能力集。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text("mode: whitelist\n", encoding="utf-8")
+    cfg = load_safety_config(config)
+    assert "read" in cfg.capabilities.to_list()
+    assert "execute" in cfg.capabilities.to_list()
+
+
+def test_subprocess_executor_capability_blocks_network(tmp_path):
+    """默认能力集缺少 network 时 curl 被拦截。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text(
+        "mode: audit\nallowed_commands:\n  - curl\n",
+        encoding="utf-8",
+    )
+    cfg = load_safety_config(config)
+    executor = SubprocessExecutor(safety_mode="audit", safety_config=cfg)
+    result = asyncio.run(executor.run("curl https://example.com"))
+    assert result.blocked is True
+    assert "missing_capabilities" in (result.reason or "")
+
+
+def test_subprocess_executor_capability_allows_with_network(tmp_path):
+    """显式授予 network 能力后 curl 放行（audit 模式）。"""
+    config = tmp_path / "safety.yaml"
+    config.write_text(
+        "mode: audit\ncapabilities:\n  - read\n  - execute\n  - network\nallowed_commands:\n  - curl\n",
+        encoding="utf-8",
+    )
+    cfg = load_safety_config(config)
+    executor = SubprocessExecutor(safety_mode="audit", safety_config=cfg)
+    result = asyncio.run(executor.run("curl --version"))
+    assert result.blocked is False

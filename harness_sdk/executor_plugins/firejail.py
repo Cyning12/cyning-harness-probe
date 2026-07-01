@@ -7,7 +7,11 @@ import re
 import shutil
 import sys
 import time
+import uuid
 
+from harness_sdk.audit.events import CapabilityAuditEvent
+from harness_sdk.audit.logger import AuditLogger
+from harness_sdk.capability import Capability
 from harness_sdk.executor_plugins.sandbox import SandboxConfigError, SandboxExecutor
 from harness_sdk.models import ExecutionResult
 
@@ -31,6 +35,7 @@ class FirejailExecutor(SandboxExecutor):
     """使用 ``firejail`` 在 Linux 主机上做进程级沙箱。
 
     macOS 不提供 firejail；构造函数会给出明确错误提示，建议改用 ``DockerExecutor``。
+    根据 ``capabilities`` 生成 ``--net=none``、``--whitelist``、``--blacklist`` 参数。
     """
 
     def __init__(
@@ -40,6 +45,7 @@ class FirejailExecutor(SandboxExecutor):
         network: bool | None = None,
         memory: str | None = None,
         cpu: float | None = None,
+        capabilities=None,
     ):
         if sys.platform != "linux":
             raise SandboxConfigError(
@@ -51,6 +57,7 @@ class FirejailExecutor(SandboxExecutor):
             network=network,
             memory=memory,
             cpu=cpu,
+            capabilities=capabilities,
         )
 
     async def run(
@@ -66,13 +73,27 @@ class FirejailExecutor(SandboxExecutor):
             )
 
         args = [firejail, "--noprofile"]
-        if not self.config.network:
+        if Capability.network not in self.config.capabilities:
             args.append("--net=none")
         args.extend(["--rlimit-as", str(_parse_memory_to_bytes(self.config.memory))])
         args.extend(["--rlimit-cpu", str(int(self.config.timeout))])
 
+        # 根据 read/write 能力生成 whitelist/blacklist
+        if cwd:
+            if Capability.read in self.config.capabilities or Capability.write in self.config.capabilities:
+                args.extend(["--whitelist", cwd])
+            else:
+                args.extend(["--blacklist", cwd])
+
         # 通过 sh -c 执行，使管道、重定向等 shell 语义与宿主机一致。
         args.extend(["sh", "-c", cmd])
+
+        self._audit(
+            session_id=session_id,
+            cmd=cmd,
+            firejail_args=args,
+            granted=self.config.capabilities.to_list(),
+        )
 
         started = time.perf_counter()
         proc: asyncio.subprocess.Process | None = None
@@ -112,3 +133,28 @@ class FirejailExecutor(SandboxExecutor):
             raise
         except Exception as exc:
             raise SandboxConfigError(f"firejail run failed: {exc}") from exc
+
+    def _audit(
+        self,
+        *,
+        session_id: str | None,
+        cmd: str,
+        firejail_args: list[str],
+        granted: list[str],
+    ) -> None:
+        """执行前写入 CapabilityAuditEvent。"""
+        try:
+            logger = AuditLogger()
+            logger.log_event(
+                CapabilityAuditEvent(
+                    run_id=session_id or uuid.uuid4().hex,
+                    task="firejail-sandbox-execution",
+                    hat="30",
+                    executor_plugin="firejail",
+                    cmd=cmd,
+                    granted_capabilities=granted,
+                    sandbox_args=firejail_args,
+                )
+            )
+        except Exception:
+            pass
