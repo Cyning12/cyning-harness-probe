@@ -1,91 +1,140 @@
-"""Harness SDK · 审计日志（v0.9.2）
+"""审计日志记录器
 
-基于配置中心 ``harness.audit`` 段写入 JSONL 审计日志，并支持按文件数/天数保留。
+v0.9.2 起读取 ``harness.audit`` 配置段，保留 v0.9.1 单例/内存回退/保留策略能力。
 """
 
 from __future__ import annotations
 
-import json
-import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import os
+import warnings
 from pathlib import Path
 from typing import Any
 
+from harness_sdk.audit.events import AuditEvent
+from harness_sdk.audit.retention import apply_retention
 from harness_sdk.config import ConfigManager
 
 
-@dataclass
-class AuditEvent:
-    """单次审计事件。"""
+def get_default_log_dir() -> Path:
+    """返回默认审计日志目录 ~/.harness_probe/audit/。"""
+    home = Path.home()
+    return home / ".harness_probe" / "audit"
 
-    event_type: str
-    payload: dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    session_id: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "timestamp": self.timestamp.isoformat(),
-            "event_type": self.event_type,
-            "session_id": self.session_id,
-            "payload": self.payload,
-        }
+def _as_config_manager(config: ConfigManager | dict[str, Any] | None) -> ConfigManager:
+    """兼容 v0.9.1 测试直接传入 audit 段字典，以及 v0.9.2 配置中心。"""
+    if config is None:
+        return ConfigManager.default()
+    if isinstance(config, ConfigManager):
+        return config
+    if isinstance(config, dict) and "harness" not in config:
+        return ConfigManager({"harness": {"audit": config}})
+    return ConfigManager(config)
+
+
+def _resolve_log_dir(config: ConfigManager) -> Path:
+    """按优先级解析审计日志目录：
+
+    1. 环境变量 HARNESS_AUDIT_LOG_DIR（保持 v0.9.1 兼容）
+    2. 配置中心 harness.audit.log_dir
+    3. 默认 ~/.harness_probe/audit
+    """
+    env_dir = os.environ.get("HARNESS_AUDIT_LOG_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser()
+    configured = config.get("harness.audit.log_dir")
+    if configured:
+        return Path(configured).expanduser()
+    return get_default_log_dir()
 
 
 class AuditLogger:
-    """审计日志写入器。
+    """单例审计日志记录器。
 
-    从配置中心读取 ``harness.audit.log_dir`` 与 ``harness.audit.retention``。
+    支持通过配置中心初始化，也保留 ``AuditLogger()`` 无参默认行为。
     """
 
-    def __init__(self, config: ConfigManager | None = None):
-        self.config = config or ConfigManager.default()
-        self._log_dir: Path | None = self.config.get_path("harness.audit.log_dir")
-        self._retention = self.config.get("harness.audit.retention", {})
+    _instance: "AuditLogger | None" = None
+    _initialized: bool
+
+    def __new__(cls, *, config: ConfigManager | dict[str, Any] | None = None) -> "AuditLogger":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self, *, config: ConfigManager | dict[str, Any] | None = None) -> None:
+        if self._initialized:
+            return
+        self._config = _as_config_manager(config)
+        self._log_dir = _resolve_log_dir(self._config)
+        self._retention = self._config.get("harness.audit.retention", {})
+        self._memory_buffer: list[str] = []
+        self._initialized = True
+
+    @classmethod
+    def get_instance(cls, *, config: ConfigManager | dict[str, Any] | None = None) -> "AuditLogger":
+        return cls(config=config)
+
+    @classmethod
+    def reset(cls) -> None:
+        """重置单例（仅用于测试）。"""
+        cls._instance = None
 
     @property
-    def log_dir(self) -> Path | None:
+    def log_dir(self) -> Path:
         return self._log_dir
 
-    def log(self, event: AuditEvent) -> Path:
-        """写入一条审计事件并返回落盘路径。"""
-        if self._log_dir is None:
-            raise RuntimeError("audit.log_dir is not configured")
-        self._log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = self._log_dir / f"audit_log_{event.session_id or 'default'}.jsonl"
-        with log_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
-        self._apply_retention()
-        return log_path
+    def get_log_dir(self) -> Path:
+        """v0.9.1 兼容别名。"""
+        return self._log_dir
 
-    def _apply_retention(self) -> None:
-        if self._log_dir is None:
-            return
-        max_files = self._retention.get("max_files")
-        max_days = self._retention.get("max_days")
-        if max_files is None and max_days is None:
-            return
+    def is_memory_fallback(self) -> bool:
+        """当前是否处于内存回退模式。"""
+        return bool(self._memory_buffer)
 
-        files = [
-            p
-            for p in self._log_dir.iterdir()
-            if p.is_file() and p.suffix == ".jsonl"
-        ]
-        files.sort(key=lambda p: p.stat().st_mtime)
+    def get_memory_logs(self) -> list[str]:
+        """返回缓存的内存日志行。"""
+        return self._memory_buffer.copy()
 
-        now = time.time()
-        days_sec = (max_days * 86400) if max_days else None
+    def get_memory_buffer(self) -> list[str]:
+        """返回因目录不可写而缓存的内存日志行（仅用于测试）。"""
+        return self._memory_buffer.copy()
 
-        for p in files:
-            remove = False
-            if days_sec is not None and (now - p.stat().st_mtime) > days_sec:
-                remove = True
-            if not remove and max_files is not None and len(files) > max_files:
-                remove = True
-            if remove:
-                try:
-                    p.unlink()
-                    files.remove(p)
-                except OSError:
-                    pass
+    def _ensure_dir(self) -> bool:
+        try:
+            self._log_dir.mkdir(parents=True, exist_ok=True)
+            return True
+        except OSError:
+            warnings.warn(
+                f"audit_log_dir_unwritable: {self._log_dir}; falling back to in-memory",
+                stacklevel=2,
+            )
+            return False
+
+    def log_event(self, event: AuditEvent) -> None:
+        """追加事件到日志文件；不可写时保存到内存。"""
+        line = event.to_log_line() + "\n"
+        if self._ensure_dir():
+            try:
+                log_path = self._log_dir / f"audit_{getattr(event, 'run_id', 'default')}.jsonl"
+                with log_path.open("a", encoding="utf-8") as f:
+                    f.write(line)
+                if self._memory_buffer:
+                    with log_path.open("a", encoding="utf-8") as f:
+                        f.writelines(self._memory_buffer)
+                    self._memory_buffer.clear()
+                apply_retention(self._log_dir, **self._retention)
+            except OSError as exc:
+                warnings.warn(
+                    f"audit_log_write_failed: {self._log_dir / 'audit_*.jsonl'}: {exc}; falling back to in-memory",
+                    stacklevel=2,
+                )
+                self._memory_buffer.append(line)
+        else:
+            self._memory_buffer.append(line)
+
+
+def get_logger(config: ConfigManager | dict[str, Any] | None = None) -> AuditLogger:
+    """便捷函数：返回 AuditLogger 单例。"""
+    return AuditLogger.get_instance(config=config)

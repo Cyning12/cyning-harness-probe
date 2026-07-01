@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.3 · 2026-07-01
+
+### Fixed
+
+- **审计模块回归修复**：v0.9.2 合并不慎丢失了 v0.9.1 审计子命令，本版本恢复全部能力并整合到配置中心。
+  - 恢复 `harness_sdk/audit/__init__.py`、`events.py`、`reader.py`、`report.py`、`retention.py`。
+  - `AuditLogger` 统一使用 `HARNESS_AUDIT_LOG_DIR` 环境变量或 `harness.audit.log_dir` 配置。
+  - `AuditReader` 与 `AuditReport` 默认同样读取上述环境变量/配置，保证 CLI 与 SDK 读取同一目录。
+  - `harness_probe/cli.py` 恢复 `audit` 子命令（`list`/`show`/`report`/`config`）并集成 `--no-audit` 开关。
+
+### Changed
+
+- 审计 CLI 命令统一使用 `AuditLogger()` 默认实例，行为与环境变量一致。
+
 ## v0.9.2 · 2026-07-01
 
 ### Added
