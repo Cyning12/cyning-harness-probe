@@ -26,6 +26,9 @@ nodes:
   - id: "EXECUTOR"
     label: "executor.py"
     kind: service
+  - id: "CONFIG"
+    label: "config.py"
+    kind: service
   - id: "SAFETY"
     label: "safety.py"
     kind: service
@@ -70,6 +73,15 @@ edges:
   - from: "EXECUTOR"
     to: "SAFETY"
     label: "CommandSafetyChecker.check"
+  - from: "CONFIG"
+    to: "EXECUTOR"
+    label: "read executor config"
+  - from: "CONFIG"
+    to: "SAFETY"
+    label: "read safety config"
+  - from: "CLI"
+    to: "CONFIG"
+    label: "config validate / show"
   - from: "BUILDER"
     to: "COMPILER"
     label: "format_contract_table / format_wiki_context"

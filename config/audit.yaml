@@ -1,0 +1,13 @@
+# Harness Probe 审计日志配置（v0.9.2）
+#
+# 加载方式：由 harness_sdk/config.py 统一加载并合并。
+# 环境变量可覆盖，例如：
+#   HARNESS_AUDIT_LOG_DIR=/var/log/harness
+#   HARNESS_AUDIT_RETENTION_MAX_FILES=200
+
+harness:
+  audit:
+    log_dir: ~/.harness_probe/audit
+    retention:
+      max_files: 100
+      max_days: 30

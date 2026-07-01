@@ -23,6 +23,7 @@ flowchart TD
     COMPILER[["compiler.py"]]
     GRAPH[["graph.py"]]
     EXECUTOR[["executor.py"]]
+    CONFIG[["config.py"]]
     SAFETY[["safety.py"]]
     MODELS[["models.py"]]
     IO[["io.py"]]
@@ -37,6 +38,9 @@ flowchart TD
     RUNNER --"query_subgraph"--> GRAPH
     RUNNER --"真实执行 verify 命令"--> EXECUTOR
     EXECUTOR --"CommandSafetyChecker.check"--> SAFETY
+    CONFIG --"read executor config"--> EXECUTOR
+    CONFIG --"read safety config"--> SAFETY
+    CLI --"config validate / show"--> CONFIG
     BUILDER --"format_contract_table / format_wiki_context"--> COMPILER
     COMPILER --"AcceptanceContract / HumanGate / HarnessTask"--> MODELS
     GRAPH --"TechGraph / GraphNode / GraphEdge"--> MODELS
@@ -57,6 +61,7 @@ flowchart TD
 | COMPILER | compiler.py | service |
 | GRAPH | graph.py | service |
 | EXECUTOR | executor.py | service |
+| CONFIG | config.py | service |
 | SAFETY | safety.py | service |
 | MODELS | models.py | data |
 | IO | io.py | service |
@@ -76,6 +81,9 @@ flowchart TD
 | RUNNER | GRAPH | query_subgraph |  |
 | RUNNER | EXECUTOR | 真实执行 verify 命令 |  |
 | EXECUTOR | SAFETY | CommandSafetyChecker.check |  |
+| CONFIG | EXECUTOR | read executor config |  |
+| CONFIG | SAFETY | read safety config |  |
+| CLI | CONFIG | config validate / show |  |
 | BUILDER | COMPILER | format_contract_table / format_wiki_context |  |
 | COMPILER | MODELS | AcceptanceContract / HumanGate / HarnessTask |  |
 | GRAPH | MODELS | TechGraph / GraphNode / GraphEdge |  |

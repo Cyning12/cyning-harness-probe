@@ -23,6 +23,7 @@
 | 80 | `80_external.graph.yaml` | EXTERNAL | @cyning/harness + 工作区 |
 | 85 | `85_mcp.graph.yaml` | MCP | MCP Server + Tools |
 | 90 | `90_executor.graph.yaml` | EXECUTOR | 真实执行器 + 安全校验 |
+| 95 | `95_config.graph.yaml` | CONFIG | 配置中心 + 统一加载/合并/校验 |
 
 ## 子图查询示例
 

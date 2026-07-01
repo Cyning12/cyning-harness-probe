@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.9.2 · 2026-07-01
+
+### Added
+
+- **配置中心（9.5）**：新增 `harness_sdk/config.py` 作为统一配置入口。
+  - 统一加载 `config/*.yaml`，支持 `harness:` 包裹格式与遗留文件名推断命名空间。
+  - 支持环境变量 `HARNESS_*` 覆盖，精确映射 `HARNESS_EXECUTOR_DEFAULT_PLUGIN`、`HARNESS_AUDIT_LOG_DIR`、`HARNESS_SAFETY_MODE` 等键。
+  - 优先级：默认值 < 配置文件 < 环境变量 < 命令行参数。
+  - 提供配置校验与友好错误提示（`ConfigError`）。
+- **配置审计与示例**：新增 `config/audit.yaml` 与 `docs/examples/config/README.md`。
+- **CLI 配置命令**：`harness-probe config validate` / `harness-probe config show`（支持 `json`/`yaml`/`markdown`）。
+- **配置图谱**：新增 `docs/_tech_graph/95_config.graph.yaml`，并在 `00_main.graph.yaml` 中接入 `CONFIG` 节点。
+- **测试覆盖**：新增 `tests/test_config_manager.py` 与 `tests/test_cli_config.py`。
+
+### Changed
+
+- `harness_sdk/executor_plugins/_loader.py` 完全通过 `ConfigManager` 解析默认插件，移除直接读取 `os.environ`。
+- `harness_probe/cli.py` 使用 `ConfigManager` 解析 `--executor-plugin`、安全模式与默认 graph/wiki 路径。
+- `harness_sdk/audit/logger.py` 与 `harness_sdk/safety.py` 通过配置中心读取配置，保留 `SafetyConfig.reload()` 热重载能力。
+
+### Fixed
+
+- 环境变量 `HARNESS_EXECUTOR_DEFAULT_PLUGIN` 现在正确覆盖 `harness.executor.default_plugin`（不再被拆分为 `default.plugin`）。
+
 ## v0.8.2 · 2026-07-01
 
 ### Added

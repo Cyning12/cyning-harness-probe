@@ -10,6 +10,8 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from pathlib import Path
 
+from harness_sdk.config import ConfigManager
+
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,29 @@ class SafetyConfig:
     def path(self) -> str | None:
         """配置来源路径（由 load_safety_config 设置）。"""
         return self._path
+
+    @classmethod
+    def from_config_manager(cls, config: ConfigManager | None = None) -> "SafetyConfig":
+        """从统一配置中心构建安全策略配置。
+
+        读取 ``harness.safety.config_path`` 指向的 YAML 文件（若存在），
+        并以 ``harness.safety.mode`` 覆盖文件中的 mode。
+        """
+        cfg = config or ConfigManager.default()
+        mode_value = cfg.get("harness.safety.mode", "whitelist")
+        try:
+            mode = SafetyMode(mode_value)
+        except ValueError as exc:
+            raise SafetyConfigError(f"invalid_safety_mode: {mode_value}") from exc
+
+        config_path = cfg.get_path("harness.safety.config_path")
+        if config_path is not None and config_path.exists():
+            instance = load_safety_config(config_path)
+            instance.mode = mode
+            return instance
+
+        instance = cls(mode=mode)
+        return instance
 
     def reload(self) -> bool:
         """从原始 path 重新加载 YAML 并合并默认配置。
