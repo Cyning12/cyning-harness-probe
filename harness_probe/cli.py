@@ -21,7 +21,7 @@ from harness_probe.io import (
     validate_task_markdown,
 )
 from harness_probe.rendering import print_cache_boundary
-from harness_sdk import TaskRunner
+from harness_sdk import ConfigError, ConfigManager, TaskRunner
 from harness_sdk.executor import (
     DryRunExecutor,
     PreviewExecutor,
@@ -35,13 +35,6 @@ from harness_sdk.safety import SafetyConfig, load_safety_config
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
-
-
-def _load_config() -> dict:
-    cfg_path = _repo_root() / "config" / "probe_config.yaml"
-    if not cfg_path.exists():
-        return {}
-    return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -74,8 +67,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 def _resolve_path(arg: str | None, cfg_key: str) -> Path:
-    cfg = _load_config()
-    path = Path(arg or cfg.get("probe", {}).get(cfg_key, ""))
+    cfg = ConfigManager.default(project_root=str(_repo_root()))
+    value = arg or cfg.get(f"harness.probe.{cfg_key}", "")
+    path = Path(value)
     if not path.is_absolute():
         path = _repo_root() / path
     return path
@@ -148,8 +142,8 @@ def cmd_compile(args: argparse.Namespace) -> int:
 def cmd_graph_query(args: argparse.Namespace) -> int:
     graph_path = _resolve_path(args.graph, "default_graph")
     graph = load_graph(graph_path)
-    cfg = _load_config()
-    depth = args.depth or cfg.get("probe", {}).get("default_depth", 2)
+    cfg = ConfigManager.default(project_root=str(_repo_root()))
+    depth = args.depth or cfg.get("harness.probe.default_depth", 2)
     result = query_subgraph(graph, args.node, depth=depth)
     print(result.mermaid)
     print(f"\n# nodes ({len(result.node_ids)}): {', '.join(result.node_ids)}")
@@ -157,23 +151,20 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 
 def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str, str | None]:
-    """解析 CLI 与 probe_config.yaml 的安全参数，返回 (config, mode, log_dir)。"""
-    cfg = _load_config()
-    safety_cfg = cfg.get("executor", {}).get("safety", {})
+    """解析 CLI 与统一配置中心的安全参数，返回 (config, mode, log_dir)。"""
+    cfg = ConfigManager.default(project_root=str(_repo_root()))
 
-    safety_mode = args.safety_mode or safety_cfg.get("mode", "whitelist")
-    execution_log_dir = args.execution_log_dir or safety_cfg.get("execution_log_dir")
+    safety_mode = args.safety_mode or cfg.get("harness.safety.mode", "whitelist")
+    execution_log_dir = args.execution_log_dir
     if execution_log_dir:
         elp = Path(execution_log_dir)
         if not elp.is_absolute():
             elp = _repo_root() / elp
         execution_log_dir = str(elp)
 
-    safety_config = SafetyConfig()
+    safety_config = SafetyConfig.from_config_manager(cfg)
     if args.safety_config:
         safety_config = load_safety_config(args.safety_config)
-    elif safety_cfg.get("config"):
-        safety_config = load_safety_config(safety_cfg["config"])
 
     if args.safety_reload:
         if not safety_config.reload():
@@ -188,14 +179,16 @@ def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str,
 def _resolve_executor_plugin_name(args: argparse.Namespace) -> str:
     """解析执行器插件名称。
 
-    优先级：--executor-plugin > --executor 兼容映射 > 配置文件 > 环境变量 > 默认。
+    优先级：--executor-plugin > --executor 兼容映射 > 配置中心 > 默认。
     """
+    cfg = ConfigManager.default(project_root=str(_repo_root()))
     if args.executor_plugin:
-        return args.executor_plugin
-    legacy_map = {"mock": "dry-run", "real": "subprocess"}
-    if args.executor in legacy_map:
-        return legacy_map[args.executor]
-    return "subprocess"
+        cfg.set("harness.executor.default_plugin", args.executor_plugin)
+    else:
+        legacy_map = {"mock": "dry-run", "real": "subprocess"}
+        if args.executor in legacy_map:
+            cfg.set("harness.executor.default_plugin", legacy_map[args.executor])
+    return cfg.get("harness.executor.default_plugin", "subprocess")
 
 
 def _resolve_sandbox_overrides(args: argparse.Namespace) -> dict[str, object]:
@@ -406,6 +399,63 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     ])
 
 
+def _render_config_markdown(cfg: ConfigManager) -> str:
+    lines = ["# Harness Probe · 当前合并配置", "", "| 键 | 值 |", "|---|---|"]
+
+    def _walk(data: dict, prefix: str) -> None:
+        for key, value in data.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, dict):
+                _walk(value, path)
+            else:
+                lines.append(f"| `{path}` | `{value!r}` |")
+
+    _walk(cfg.to_dict(), "")
+    return "\n".join(lines)
+
+
+def cmd_config_validate(args: argparse.Namespace) -> int:
+    """校验当前配置并返回退出码。"""
+    try:
+        cfg = ConfigManager.default(
+            config_dir=args.config_dir,
+            project_root=str(_repo_root()),
+        )
+    except ConfigError as exc:
+        print(f"config_error: {exc}", file=sys.stderr)
+        return 2
+
+    errors = cfg.validate()
+    if errors:
+        for err in errors:
+            print(f"[ERROR] {err}")
+        return 2
+
+    print("OK · configuration valid")
+    return 0
+
+
+def cmd_config_show(args: argparse.Namespace) -> int:
+    """输出当前合并后的配置。"""
+    try:
+        cfg = ConfigManager.default(
+            config_dir=args.config_dir,
+            project_root=str(_repo_root()),
+        )
+    except ConfigError as exc:
+        print(f"config_error: {exc}", file=sys.stderr)
+        return 2
+
+    fmt = args.format
+    if fmt == "json":
+        print(json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False))
+    elif fmt == "yaml":
+        print(yaml.safe_dump(cfg.to_dict(), sort_keys=False, allow_unicode=True))
+    else:  # markdown
+        print(_render_config_markdown(cfg))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Harness Probe · L0/L1/L1.5/L2 探针")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -542,6 +592,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_mcp.add_argument("--transport", default="stdio", choices=["stdio", "sse"], help="MCP transport")
     p_mcp.add_argument("--port", type=int, default=8080, help="SSE port")
     p_mcp.set_defaults(func=cmd_mcp)
+
+    p_config = sub.add_parser("config", help="配置中心")
+    config_sub = p_config.add_subparsers(dest="config_command", required=True)
+
+    p_config_validate = config_sub.add_parser("validate", help="校验配置并返回退出码")
+    p_config_validate.add_argument(
+        "--config-dir",
+        default=None,
+        help="配置目录，默认使用 <repo>/config",
+    )
+    p_config_validate.set_defaults(func=cmd_config_validate)
+
+    p_config_show = config_sub.add_parser("show", help="显示合并后的配置")
+    p_config_show.add_argument(
+        "--config-dir",
+        default=None,
+        help="配置目录，默认使用 <repo>/config",
+    )
+    p_config_show.add_argument(
+        "--format",
+        default="json",
+        choices=["json", "yaml", "markdown"],
+        help="输出格式：json（默认）/ yaml / markdown",
+    )
+    p_config_show.set_defaults(func=cmd_config_show)
 
     return parser
 

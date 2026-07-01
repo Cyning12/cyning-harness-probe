@@ -17,6 +17,7 @@ from harness_sdk.compiler import (
     retrieve_wiki,
     validate_human_gate_rules,
 )
+from harness_sdk.config import ConfigError, ConfigManager
 from harness_sdk.exceptions import BlockedError
 from harness_sdk.executor import SubprocessExecutor, VerifyExecutor
 from harness_sdk.graph import query_subgraph, subgraph_to_mermaid
@@ -49,6 +50,9 @@ __all__ = [
     "parse_human_gates",
     "retrieve_wiki",
     "validate_human_gate_rules",
+    # config
+    "ConfigError",
+    "ConfigManager",
     # exceptions
     "BlockedError",
     # executor

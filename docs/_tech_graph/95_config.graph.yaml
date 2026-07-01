@@ -1,0 +1,77 @@
+graph_id: "95_config"
+title: "配置中心"
+description: "统一配置加载、合并、校验与环境变量/CLI覆盖"
+version: "2026-07-01"
+direction: "TD"
+
+nodes:
+  - id: "CONFIG_MANAGER"
+    label: "harness_sdk/config.py"
+    kind: service
+  - id: "CONFIG_FILES"
+    label: "config/*.yaml"
+    kind: storage
+  - id: "ENV_VARS"
+    label: "HARNESS_* environment"
+    kind: input
+  - id: "CLI_OVERRIDES"
+    label: "--executor-plugin / --safety-mode / --config-dir"
+    kind: input
+  - id: "CLI_CONFIG"
+    label: "config validate / config show"
+    kind: entry
+  - id: "EXECUTOR"
+    label: "executor.py / executor_plugins"
+    kind: service
+  - id: "SAFETY"
+    label: "safety.py"
+    kind: service
+  - id: "AUDIT"
+    label: "audit/logger.py"
+    kind: service
+
+edges:
+  - from: "CONFIG_FILES"
+    to: "CONFIG_MANAGER"
+    label: "load directory"
+    anchors:
+      - path: "harness_sdk/config.py"
+        symbol: "ConfigManager.default"
+  - from: "ENV_VARS"
+    to: "CONFIG_MANAGER"
+    label: "override"
+    anchors:
+      - path: "harness_sdk/config.py"
+        symbol: "_apply_env_overrides"
+  - from: "CLI_OVERRIDES"
+    to: "CONFIG_MANAGER"
+    label: "set() highest priority"
+    anchors:
+      - path: "harness_sdk/config.py"
+        symbol: "ConfigManager.set"
+  - from: "CONFIG_MANAGER"
+    to: "EXECUTOR"
+    label: "read default_plugin / plugins / sandbox"
+    anchors:
+      - path: "harness_sdk/executor_plugins/_loader.py"
+        symbol: "load_executor_plugin"
+  - from: "CONFIG_MANAGER"
+    to: "SAFETY"
+    label: "read mode / config_path"
+    anchors:
+      - path: "harness_sdk/safety.py"
+        symbol: "SafetyConfig.from_config_manager"
+  - from: "CONFIG_MANAGER"
+    to: "AUDIT"
+    label: "read log_dir / retention"
+    anchors:
+      - path: "harness_sdk/audit/logger.py"
+        symbol: "AuditLogger"
+  - from: "CLI_CONFIG"
+    to: "CONFIG_MANAGER"
+    label: "validate / show"
+    anchors:
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_config_validate"
+      - path: "harness_probe/cli.py"
+        symbol: "cmd_config_show"

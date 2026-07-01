@@ -1,7 +1,7 @@
 {
   "schema_version": "graph_v2",
   "freeze_id": "HARNESS-PROBE-GRAPH-V2",
-  "generated_at": "2026-07-01T01:46:27.799766+00:00",
+  "generated_at": "2026-07-01T03:57:32.948742+00:00",
   "nodes": [
     {
       "id": "CLI",
@@ -50,6 +50,13 @@
       "label": "executor.py",
       "kind": "service",
       "module_id": "EXECUTOR",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CONFIG",
+      "label": "config.py",
+      "kind": "service",
+      "module_id": "CONFIG",
       "graph_id": "probe"
     },
     {
@@ -359,6 +366,48 @@
       "kind": "input",
       "module_id": "CLI_ARGS",
       "graph_id": "probe"
+    },
+    {
+      "id": "CONFIG_MANAGER",
+      "label": "harness_sdk/config.py",
+      "kind": "service",
+      "module_id": "CONFIG_MANAGER",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CONFIG_FILES",
+      "label": "config/*.yaml",
+      "kind": "storage",
+      "module_id": "CONFIG_FILES",
+      "graph_id": "probe"
+    },
+    {
+      "id": "ENV_VARS",
+      "label": "HARNESS_* environment",
+      "kind": "input",
+      "module_id": "ENV_VARS",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CLI_OVERRIDES",
+      "label": "--executor-plugin / --safety-mode / --config-dir",
+      "kind": "input",
+      "module_id": "CLI_OVERRIDES",
+      "graph_id": "probe"
+    },
+    {
+      "id": "CLI_CONFIG",
+      "label": "config validate / config show",
+      "kind": "entry",
+      "module_id": "CLI_CONFIG",
+      "graph_id": "probe"
+    },
+    {
+      "id": "AUDIT",
+      "label": "audit/logger.py",
+      "kind": "service",
+      "module_id": "AUDIT",
+      "graph_id": "probe"
     }
   ],
   "edges": [
@@ -449,6 +498,33 @@
       "mark": "CommandSafetyChecker.check",
       "type": "depends_on",
       "label": "CommandSafetyChecker.check",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "CONFIG",
+      "to": "EXECUTOR",
+      "mark": "read executor config",
+      "type": "depends_on",
+      "label": "read executor config",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "CONFIG",
+      "to": "SAFETY",
+      "mark": "read safety config",
+      "type": "depends_on",
+      "label": "read safety config",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "CLI",
+      "to": "CONFIG",
+      "mark": "config validate / show",
+      "type": "depends_on",
+      "label": "config validate / show",
       "graph_id": "probe",
       "anchors": []
     },
@@ -1177,6 +1253,108 @@
       "label": "return preview ExecutionResult",
       "graph_id": "probe",
       "anchors": []
+    },
+    {
+      "from": "CONFIG_FILES",
+      "to": "CONFIG_MANAGER",
+      "mark": "load directory",
+      "type": "depends_on",
+      "label": "load directory",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/config.py",
+          "symbol": "ConfigManager.default"
+        }
+      ]
+    },
+    {
+      "from": "ENV_VARS",
+      "to": "CONFIG_MANAGER",
+      "mark": "override",
+      "type": "depends_on",
+      "label": "override",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/config.py",
+          "symbol": "_apply_env_overrides"
+        }
+      ]
+    },
+    {
+      "from": "CLI_OVERRIDES",
+      "to": "CONFIG_MANAGER",
+      "mark": "set() highest priority",
+      "type": "depends_on",
+      "label": "set() highest priority",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/config.py",
+          "symbol": "ConfigManager.set"
+        }
+      ]
+    },
+    {
+      "from": "CONFIG_MANAGER",
+      "to": "EXECUTOR",
+      "mark": "read default_plugin / plugins / sandbox",
+      "type": "depends_on",
+      "label": "read default_plugin / plugins / sandbox",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/_loader.py",
+          "symbol": "load_executor_plugin"
+        }
+      ]
+    },
+    {
+      "from": "CONFIG_MANAGER",
+      "to": "SAFETY",
+      "mark": "read mode / config_path",
+      "type": "depends_on",
+      "label": "read mode / config_path",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/safety.py",
+          "symbol": "SafetyConfig.from_config_manager"
+        }
+      ]
+    },
+    {
+      "from": "CONFIG_MANAGER",
+      "to": "AUDIT",
+      "mark": "read log_dir / retention",
+      "type": "depends_on",
+      "label": "read log_dir / retention",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/audit/logger.py",
+          "symbol": "AuditLogger"
+        }
+      ]
+    },
+    {
+      "from": "CLI_CONFIG",
+      "to": "CONFIG_MANAGER",
+      "mark": "validate / show",
+      "type": "depends_on",
+      "label": "validate / show",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_config_validate"
+        },
+        {
+          "path": "harness_probe/cli.py",
+          "symbol": "cmd_config_show"
+        }
+      ]
     }
   ]
 }
