@@ -1,4 +1,4 @@
-"""Harness SDK · 命令安全校验（v0.8）"""
+"""Harness SDK · 命令安全校验（v0.9.4）"""
 
 from __future__ import annotations
 
@@ -6,10 +6,17 @@ import logging
 import os
 import shlex
 import warnings
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from harness_sdk.capability import (
+    CapabilitySet,
+    CommandRisk,
+    evaluate_command_risk,
+    infer_capabilities_from_command,
+)
 from harness_sdk.config import ConfigManager
 
 
@@ -56,24 +63,33 @@ class PreviewReport:
     recommended_mode: str
     risk_level: str
     reason: str | None = None
+    required_capabilities: list[str] = field(default_factory=list)
+    granted_capabilities: list[str] = field(default_factory=list)
+    missing_capabilities: list[str] = field(default_factory=list)
+    command_risk: str = ""
 
 
-@dataclass
-class SafetyConfig:
-    """CommandSafetyChecker 配置。"""
+class SafetyConfig(BaseModel):
+    """CommandSafetyChecker 配置（Pydantic v2）。
+
+    保留 v0.8 的 public API（字段访问、``load_safety_config``、``reload()``），
+    内部使用 Pydantic BaseModel 以支持 ``capabilities`` 等结构化字段。
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
 
     mode: SafetyMode = SafetyMode.whitelist
-    allowed_commands: list[str] = field(default_factory=lambda: DEFAULT_ALLOWED_COMMANDS)
-    dangerous_metacharacters: list[str] = field(
-        default_factory=lambda: DEFAULT_DANGEROUS_METACHARACTERS
+    allowed_commands: list[str] = Field(default_factory=lambda: list(DEFAULT_ALLOWED_COMMANDS))
+    dangerous_metacharacters: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_DANGEROUS_METACHARACTERS)
     )
-    dangerous_prefixes: list[str] = field(default_factory=lambda: DEFAULT_DANGEROUS_PREFIXES)
+    dangerous_prefixes: list[str] = Field(default_factory=lambda: list(DEFAULT_DANGEROUS_PREFIXES))
     max_command_length: int = 1024
     unsafe_env_name: str = "HARNESS_UNSAFE"
     unsafe_env_value: str = "1"
+    capabilities: CapabilitySet = Field(default_factory=CapabilitySet.default)
 
-    def __post_init__(self):
-        self._path: str | None = None
+    _path: str | None = PrivateAttr(default=None)
 
     @property
     def path(self) -> str | None:
@@ -118,10 +134,8 @@ class SafetyConfig:
             logger.error("safety_config_reload_failed: %s", exc)
             return False
 
-        for f in fields(self):
-            if f.name == "_path":
-                continue
-            setattr(self, f.name, getattr(new_config, f.name))
+        for name, value in new_config.model_dump().items():
+            setattr(self, name, value)
         self._path = new_config._path
         return True
 
@@ -159,6 +173,8 @@ DEFAULT_DANGEROUS_METACHARACTERS: list[str] = [
 ]
 
 # 默认危险命令前缀黑名单（不可覆盖）。
+# 注：网络相关命令（curl/wget/ssh/scp）交由 capability 模型处理，
+# 不再固定黑名单，便于沙箱按 network 能力显式授予/拒绝。
 DEFAULT_DANGEROUS_PREFIXES: list[str] = [
     "rm",
     "mv",
@@ -167,10 +183,6 @@ DEFAULT_DANGEROUS_PREFIXES: list[str] = [
     "su",
     "chmod",
     "chown",
-    "curl",
-    "wget",
-    "ssh",
-    "scp",
     "eval",
     "exec",
     "source",
@@ -185,6 +197,7 @@ def load_safety_config(path: str | Path) -> SafetyConfig:
     - allowed_commands：项目配置追加到默认列表
     - dangerous_metacharacters / dangerous_prefixes：项目配置追加到默认列表
     - 危险前缀不可被删除或覆盖；如果项目配置尝试覆盖，打印警告并忽略
+    - capabilities：项目配置完全替换默认能力集（方便精确控制）
     """
     config_path = Path(path)
     if not config_path.exists():
@@ -235,6 +248,11 @@ def load_safety_config(path: str | Path) -> SafetyConfig:
     if not isinstance(max_command_length, int) or max_command_length <= 0:
         raise SafetyConfigError("max_command_length_must_be_positive_int")
 
+    capabilities: CapabilitySet = CapabilitySet.default()
+    user_capabilities = raw.get("capabilities")
+    if user_capabilities is not None:
+        capabilities = CapabilitySet(user_capabilities)
+
     config = SafetyConfig(
         mode=mode,
         allowed_commands=allowed_commands,
@@ -243,15 +261,25 @@ def load_safety_config(path: str | Path) -> SafetyConfig:
         max_command_length=max_command_length,
         unsafe_env_name=str(raw.get("unsafe_env_name", "HARNESS_UNSAFE")),
         unsafe_env_value=str(raw.get("unsafe_env_value", "1")),
+        capabilities=capabilities,
     )
     config._path = str(config_path.resolve())
     return config
 
 
-class CommandSafetyChecker:
-    """基于白名单 + 黑名单的简单命令安全校验器。
+def _map_risk_to_preview_level(risk: CommandRisk) -> PreviewRiskLevel:
+    """将新的 CommandRisk 映射到兼容 v0.8 的预览风险等级。"""
+    if risk == CommandRisk.safe:
+        return PreviewRiskLevel.low
+    if risk == CommandRisk.restricted:
+        return PreviewRiskLevel.medium
+    return PreviewRiskLevel.high
 
-    不做命令语义级分析，仅做前缀与子串匹配。
+
+class CommandSafetyChecker:
+    """基于白名单 + 黑名单 + 能力模型的简单命令安全校验器。
+
+    不做命令语义级分析，仅做前缀、子串与能力匹配。
     """
 
     def __init__(self, config: SafetyConfig | None = None):
@@ -272,6 +300,14 @@ class CommandSafetyChecker:
         reason = self._check_violations(cmd)
         if reason:
             return SafetyResult(allowed=False, reason=reason, mode=mode)
+
+        # 能力模型：缺少必需能力时拒绝
+        risk, _required, _missing, cap_reason = evaluate_command_risk(
+            cmd, self.config.capabilities
+        )
+        if risk == CommandRisk.blocked:
+            return SafetyResult(allowed=False, reason=cap_reason or "blocked_by_capability", mode=mode)
+
         return SafetyResult(allowed=True, reason=None, mode=mode)
 
     def preview(self, cmd: str) -> PreviewReport:
@@ -300,17 +336,27 @@ class CommandSafetyChecker:
                 matched_whitelist.append(allowed)
 
         if matched_blacklist:
-            risk_level = PreviewRiskLevel.high.value
+            risk = CommandRisk.blocked
             recommended_mode = "blocked"
             reason = matched_blacklist[0]
         elif matched_whitelist:
-            risk_level = PreviewRiskLevel.low.value
+            risk = CommandRisk.safe
             recommended_mode = "whitelist"
             reason = None
         else:
-            risk_level = PreviewRiskLevel.medium.value
-            recommended_mode = "audit"
-            reason = "not_in_whitelist"
+            risk, _required, _missing, reason = evaluate_command_risk(
+                cmd, self.config.capabilities
+            )
+            if risk == CommandRisk.blocked:
+                recommended_mode = "blocked"
+            else:
+                # 保持 v0.8 预览行为：未命中白名单/黑名单的命令默认 medium
+                risk = CommandRisk.restricted
+                recommended_mode = "audit"
+                reason = reason or "not_in_whitelist"
+
+        risk_level = _map_risk_to_preview_level(risk).value
+        required = infer_capabilities_from_command(cmd)  # noqa: F841
 
         return PreviewReport(
             cmd=cmd,
@@ -320,7 +366,18 @@ class CommandSafetyChecker:
             recommended_mode=recommended_mode,
             risk_level=risk_level,
             reason=reason,
+            required_capabilities=required.to_list(),
+            granted_capabilities=self.config.capabilities.to_list(),
+            missing_capabilities=(required - self.config.capabilities).to_list(),
+            command_risk=risk.value,
         )
+
+    def evaluate_risk(self, cmd: str) -> CommandRisk:
+        """按能力模型评估命令风险等级。"""
+        risk, _required, _missing, _reason = evaluate_command_risk(
+            cmd, self.config.capabilities
+        )
+        return risk
 
     def _unsafe_confirmed(self) -> bool:
         return os.environ.get(self.config.unsafe_env_name) == self.config.unsafe_env_value

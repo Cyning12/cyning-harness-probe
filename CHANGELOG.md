@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.9.4 · 2026-07-01
+
+### Added
+
+- **沙箱能力模型（8.5）**：新增 `harness_sdk/capability.py`。
+  - `Capability` 枚举：`read`、`write`、`execute`、`network`、`shell`、`env`、`sudo`。
+  - `CapabilitySet`：能力集合声明、包含、并/交/差运算，支持 Pydantic 校验与序列化。
+  - `CommandRisk` 枚举：`safe`、`restricted`、`dangerous`、`blocked`。
+  - 根据命令字符串推断所需能力，并评估在已授予能力下的风险等级。
+- **SafetyConfig Pydantic 化**：`harness_sdk/safety.py` 的 `SafetyConfig` 迁移为 Pydantic `BaseModel`。
+  - 保留 public API：`load_safety_config`、`check`、`preview`、`reload()`。
+  - 新增 `capabilities` 字段，支持从 `config/safety.yaml` 加载。
+  - `CommandSafetyChecker` 在缺少必需能力时拒绝命令。
+- **沙箱执行器能力感知**：
+  - `DockerExecutor` 根据 `network` 能力设置 `--network none`，根据 `read`/`write` 能力设置挂载策略。
+  - `FirejailExecutor` 根据能力生成 `--net=none`、`--whitelist`、`--blacklist` 参数。
+  - `SandboxExecutor` 校验能力冲突：`sudo` 能力禁止在沙箱内使用。
+- **CapabilityAuditEvent**：沙箱执行前写入审计日志，记录授予能力、沙箱参数与命令。
+- **CLI 增强**：
+  - 新增 `harness-probe safety show`：显示当前安全策略与能力模型。
+  - 新增 `harness-probe safety evaluate <cmd>`：评估命令风险等级。
+  - `run` / `compile` 增加 `--capability` 参数显式声明额外能力。
+- **配置与图谱**：
+  - 新增 `config/capabilities.yaml`：默认能力模型定义。
+  - 更新 `config/safety.yaml`：支持 `capabilities` 字段。
+  - 新增 `docs/_tech_graph/86_sandbox_capabilities.graph.yaml`。
+
+### Changed
+
+- `SafetyConfig` 内部改为 Pydantic 模型，保持字段访问与现有行为兼容。
+- `PreviewReport` 增加 `required_capabilities`、`granted_capabilities`、`missing_capabilities`、`command_risk` 字段。
+- `SandboxExecutor.describe()` 输出包含当前能力集。
+
 ## v0.9.3 · 2026-07-01
 
 ### Fixed

@@ -1,0 +1,30 @@
+# Harness Probe · 默认沙箱能力模型（v0.9.4）
+#
+# 能力（capability）是沙箱执行器与安全策略之间的显式契约。
+# 本文件定义默认授予的能力集，可在 config/safety.yaml 的 capabilities 字段覆盖。
+
+# 默认能力：允许读取当前目录与执行基础命令，默认禁用写、网络、shell、env、sudo
+default:
+  - read
+  - execute
+
+# 高危能力：需要显式声明并在 task 中说明理由
+privileged:
+  - write
+  - network
+  - sudo
+
+# 受限能力：允许但会提升命令风险等级
+restricted:
+  - shell
+  - env
+
+# 能力说明
+description:
+  read: 读取文件系统 / 当前目录
+  write: 写入文件系统（含重定向、rm、mv、cp）
+  execute: 执行任意命令（基础能力）
+  network: 访问网络
+  shell: 使用 shell 元字符（管道、逻辑组合、子命令等）
+  env: 读取/设置环境变量
+  sudo: 提权（sudo / su）

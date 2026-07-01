@@ -32,6 +32,7 @@ from harness_sdk.executor import (
     load_executor_plugin,
 )
 from harness_sdk.graph import query_subgraph
+from harness_sdk.capability import CapabilitySet, evaluate_command_risk
 from harness_sdk.safety import SafetyConfig, load_safety_config
 
 
@@ -231,8 +232,8 @@ def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str,
     """解析 CLI 与统一配置中心的安全参数，返回 (config, mode, log_dir)。"""
     cfg = ConfigManager.default(project_root=str(_repo_root()))
 
-    safety_mode = args.safety_mode or cfg.get("harness.safety.mode", "whitelist")
-    execution_log_dir = args.execution_log_dir
+    safety_mode = getattr(args, "safety_mode", None) or cfg.get("harness.safety.mode", "whitelist")
+    execution_log_dir = getattr(args, "execution_log_dir", None)
     if execution_log_dir:
         elp = Path(execution_log_dir)
         if not elp.is_absolute():
@@ -240,10 +241,15 @@ def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str,
         execution_log_dir = str(elp)
 
     safety_config = SafetyConfig.from_config_manager(cfg)
-    if args.safety_config:
+    if getattr(args, "safety_config", None):
         safety_config = load_safety_config(args.safety_config)
 
-    if args.safety_reload:
+    # --capability 显式追加到策略能力集
+    if getattr(args, "capability", None):
+        extra = CapabilitySet(args.capability)
+        safety_config.capabilities = safety_config.capabilities | extra
+
+    if getattr(args, "safety_reload", False):
         if not safety_config.reload():
             warnings.warn(
                 f"safety_config_reload_failed or no path: {safety_config.path}",
@@ -279,6 +285,8 @@ def _resolve_sandbox_overrides(args: argparse.Namespace) -> dict[str, object]:
         overrides["network"] = False
     if args.sandbox_memory:
         overrides["memory"] = args.sandbox_memory
+    if getattr(args, "capability", None):
+        overrides["capabilities"] = CapabilitySet(args.capability)
     return overrides
 
 
@@ -549,6 +557,75 @@ def cmd_audit_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_safety_show(args: argparse.Namespace) -> int:
+    """显示当前安全策略与能力模型。"""
+    safety_config, _safety_mode, _log_dir = _resolve_safety_params(args)
+
+    if getattr(args, "format", "markdown") == "json":
+        print(
+            json.dumps(
+                {
+                    "mode": safety_config.mode.value,
+                    "allowed_commands": safety_config.allowed_commands,
+                    "dangerous_metacharacters": safety_config.dangerous_metacharacters,
+                    "dangerous_prefixes": safety_config.dangerous_prefixes,
+                    "max_command_length": safety_config.max_command_length,
+                    "capabilities": safety_config.capabilities.to_list(),
+                    "source": safety_config.path,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    lines = [
+        "# Harness Probe · 当前安全策略",
+        "",
+        f"- **mode**: `{safety_config.mode.value}`",
+        f"- **max_command_length**: {safety_config.max_command_length}",
+        f"- **capabilities**: {', '.join(safety_config.capabilities.to_list())}",
+        f"- **source**: `{safety_config.path or 'default'}`",
+        "",
+        "## allowed_commands",
+        "",
+    ]
+    for cmd in safety_config.allowed_commands:
+        lines.append(f"- `{cmd}`")
+    lines.extend(["", "## dangerous_metacharacters", ""])
+    for token in safety_config.dangerous_metacharacters:
+        lines.append(f"- `{token}`")
+    lines.extend(["", "## dangerous_prefixes", ""])
+    for prefix in safety_config.dangerous_prefixes:
+        lines.append(f"- `{prefix}`")
+    print("\n".join(lines))
+    return 0
+
+
+def cmd_safety_evaluate(args: argparse.Namespace) -> int:
+    """评估命令风险等级。"""
+    safety_config, _safety_mode, _log_dir = _resolve_safety_params(args)
+    cmd = " ".join(args.cmd)
+    risk, required, missing, reason = evaluate_command_risk(
+        cmd, safety_config.capabilities
+    )
+    print(
+        json.dumps(
+            {
+                "cmd": cmd,
+                "risk": risk.value,
+                "required_capabilities": required.to_list(),
+                "granted_capabilities": safety_config.capabilities.to_list(),
+                "missing_capabilities": missing.to_list(),
+                "reason": reason,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _render_config_markdown(cfg: ConfigManager) -> str:
     lines = ["# Harness Probe · 当前合并配置", "", "| 键 | 值 |", "|---|---|"]
 
@@ -627,6 +704,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_compile.add_argument("--query", default=None)
     p_compile.add_argument("--quiet", action="store_true")
     p_compile.add_argument("--no-audit", action="store_true", help="禁用审计日志")
+    p_compile.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="显式声明额外能力（可多次指定）",
+    )
     p_compile.set_defaults(func=cmd_compile)
 
     p_run = sub.add_parser("run", help="模拟执行多帽序列（dry-run）")
@@ -714,6 +797,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--no-audit", action="store_true", help="禁用审计日志")
     p_run.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="显式声明额外能力（可多次指定）",
+    )
+    p_run.add_argument(
         "--preview",
         action="store_true",
         help="不执行命令，仅输出沙箱影响报告",
@@ -795,6 +884,58 @@ def build_parser() -> argparse.ArgumentParser:
         help="输出格式：json（默认）/ yaml / markdown",
     )
     p_config_show.set_defaults(func=cmd_config_show)
+
+    p_safety = sub.add_parser("safety", help="安全策略与能力模型")
+    safety_sub = p_safety.add_subparsers(dest="safety_command", required=True)
+
+    p_safety_show = safety_sub.add_parser("show", help="显示当前安全策略与能力模型")
+    p_safety_show.add_argument(
+        "--safety-config",
+        default=None,
+        help="安全策略 YAML 路径，与默认配置合并",
+    )
+    p_safety_show.add_argument(
+        "--safety-reload",
+        action="store_true",
+        help="运行时重新加载安全策略文件",
+    )
+    p_safety_show.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="显式声明额外能力（可多次指定）",
+    )
+    p_safety_show.add_argument(
+        "--format",
+        default="markdown",
+        choices=["json", "markdown"],
+        help="输出格式：markdown（默认）/ json",
+    )
+    p_safety_show.set_defaults(func=cmd_safety_show)
+
+    p_safety_evaluate = safety_sub.add_parser("evaluate", help="评估命令风险等级")
+    p_safety_evaluate.add_argument(
+        "cmd",
+        nargs="+",
+        help="要评估的命令（多个参数将用空格连接）",
+    )
+    p_safety_evaluate.add_argument(
+        "--safety-config",
+        default=None,
+        help="安全策略 YAML 路径，与默认配置合并",
+    )
+    p_safety_evaluate.add_argument(
+        "--safety-reload",
+        action="store_true",
+        help="运行时重新加载安全策略文件",
+    )
+    p_safety_evaluate.add_argument(
+        "--capability",
+        action="append",
+        default=[],
+        help="显式声明额外能力（可多次指定）",
+    )
+    p_safety_evaluate.set_defaults(func=cmd_safety_evaluate)
 
     return parser
 

@@ -60,4 +60,22 @@ class CompileEvent(AuditEvent):
     output: str = ""  # 输出摘要或产物路径
 
 
-__all__ = ["AuditEvent", "CompileEvent", "RunEvent", "VerifyEvent"]
+class CapabilityAuditEvent(AuditEvent):
+    """沙箱执行前记录实际授予 capability、沙箱参数与命令的审计事件。"""
+
+    event_type: Literal["capability"] = "capability"
+    executor_plugin: str = ""
+    cmd: str = ""
+    granted_capabilities: list[str] = Field(default_factory=list)
+    denied_capabilities: list[str] = Field(default_factory=list)
+    sandbox_args: list[str] = Field(default_factory=list)
+    reason: str | None = None
+
+
+__all__ = [
+    "AuditEvent",
+    "CapabilityAuditEvent",
+    "CompileEvent",
+    "RunEvent",
+    "VerifyEvent",
+]

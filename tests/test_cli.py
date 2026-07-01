@@ -45,7 +45,8 @@ def test_cli_run_executor_mock_default():
     assert code == 0
     outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
     assert outputs
-    run_graph = json.loads(outputs[-1].read_text(encoding="utf-8"))
+    # 可能产生其他 task_run 文件，按 mtime 取最新
+    run_graph = json.loads(max(outputs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8"))
     assert run_graph["status"] == "done"
     for node in run_graph["nodes"]:
         evidence = json.loads(node["evidence"])
@@ -65,7 +66,7 @@ def test_cli_run_executor_real():
     assert code == 0
     outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
     assert outputs
-    # 测试运行可能产生其他 task_run 文件，按 mtime 取最新
+    # 可能产生其他 task_run 文件，按 mtime 取最新
     run_graph = json.loads(max(outputs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8"))
     # sample_task verify 命令为示例且会失败，因此 graph 被标记为 blocked
     assert run_graph["status"] == "blocked"
@@ -91,7 +92,8 @@ def test_cli_run_executor_plugin_dry_run():
     assert code == 0
     outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
     assert outputs
-    run_graph = json.loads(outputs[-1].read_text(encoding="utf-8"))
+    # 可能产生其他 task_run 文件，按 mtime 取最新
+    run_graph = json.loads(max(outputs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8"))
     assert run_graph["status"] == "done"
     for node in run_graph["nodes"]:
         evidence = json.loads(node["evidence"])
@@ -127,7 +129,8 @@ def test_cli_run_executor_plugin_preview():
     assert code == 0
     outputs = sorted((REPO_ROOT / "outputs").glob("task_run_*.json"))
     assert outputs
-    run_graph = json.loads(outputs[-1].read_text(encoding="utf-8"))
+    # 可能产生其他 task_run 文件，按 mtime 取最新
+    run_graph = json.loads(max(outputs, key=lambda p: p.stat().st_mtime).read_text(encoding="utf-8"))
     assert run_graph["status"] == "done"
 
 
