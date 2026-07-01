@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.5 · 2026-07-01
+
+### Added
+
+- **配置中心增强（v0.9.5）**：
+  - 新增 `harness_sdk/config_models.py`：使用 Pydantic v2 定义 `HarnessConfig`、`ExecutorConfig`、`SandboxConfig`、`AuditConfig`、`RetentionConfig`、`SafetyRefConfig`。
+  - 配置模型自动校验字段类型、枚举（`mode` 只能为 `whitelist`/`audit`/`unsafe`）与插件路径格式（`package.module:ClassName`）。
+  - `ConfigManager` 支持多环境加载：`config/<file>.yaml` → `config/<file>.<env>.yaml`（后者深合并覆盖）。
+  - `HARNESS_ENV` 环境变量与 CLI `--env` / `-e` 参数可切换环境；`run`/`compile`/`safety`/`config` 子命令统一支持 `--env`。
+  - 配置热重载：`ConfigManager.watch()` / `stop_watch()` / `register_on_reload(callback)`，支持 `with cfg.watch(): ...` 上下文管理器。
+  - 热重载使用 `watchdog` 优先，并保留 0.5s 防抖；`watchdog` 已升级为必装依赖。
+  - CLI 新增 `harness-probe config watch`（前台/后台监听）并支持 `--verbose`。
+  - 新增 `config/executor.test.yaml` 作为测试环境示例。
+  - 新增 `docs/_tech_graph/87_config_center_enhancement.graph.yaml`。
+  - 新增测试 `tests/test_config_enhancement.py` 覆盖模型校验、多环境、热重载与 CLI 输出。
+
+### Changed
+
+- `ConfigManager.validate()` 内部使用 Pydantic 模型，对外仍返回 `list[str]`，保持向后兼容。
+- `pyproject.toml` 版本更新至 `0.9.5`，`watchdog>=4.0` 加入必装依赖。
+
 ## v0.9.4 · 2026-07-01
 
 ### Added

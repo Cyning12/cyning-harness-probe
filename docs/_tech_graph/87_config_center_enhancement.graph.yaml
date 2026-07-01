@@ -1,0 +1,61 @@
+version: "v0.9.5"
+module: CONFIG
+graph_type: flowchart
+
+nodes:
+  - id: base
+    label: "config/<file>.yaml\n基础配置"
+    type: data
+  - id: env
+    label: "config/<file>.<env>.yaml\n环境覆盖"
+    type: data
+  - id: env_vars
+    label: "HARNESS_*\n环境变量"
+    type: data
+  - id: cli
+    label: "--env / -e\n命令行参数"
+    type: data
+  - id: pydantic
+    label: "Pydantic Schema\n类型校验"
+    type: process
+  - id: manager
+    label: "ConfigManager\n统一配置"
+    type: process
+  - id: watch
+    label: "watchdog / polling\n热重载"
+    type: process
+  - id: consumers
+    label: "SafetyConfig / TaskRunner\n配置消费方"
+    type: process
+  - id: cli_config
+    label: "harness-probe config\nvalidate / show / watch"
+    type: interface
+
+edges:
+  - from: base
+    to: manager
+    label: "加载 ->"
+  - from: env
+    to: manager
+    label: "深合并 ->"
+  - from: env_vars
+    to: manager
+    label: "覆盖 ->"
+  - from: cli
+    to: manager
+    label: "最高优先级 ->"
+  - from: manager
+    to: pydantic
+    label: "validate ->"
+  - from: manager
+    to: watch
+    label: "watch() ->"
+  - from: watch
+    to: manager
+    label: "reload ~>"
+  - from: manager
+    to: consumers
+    label: "get() ->"
+  - from: manager
+    to: cli_config
+    label: "to_dict() ->"

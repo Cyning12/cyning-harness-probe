@@ -1,0 +1,13 @@
+default_plugin: docker
+plugins:
+  dry-run: harness_sdk.executor_plugins.dry_run:DryRunExecutor
+  preview: harness_sdk.executor_plugins.preview:PreviewExecutor
+  subprocess: harness_sdk.executor_plugins.subprocess:SubprocessExecutor
+  docker: harness_sdk.executor_plugins.docker:DockerExecutor
+  firejail: harness_sdk.executor_plugins.firejail:FirejailExecutor
+sandbox:
+  image: python:3.11-slim
+  timeout: 30.0
+  network: false
+  memory: 256m
+  cpu: 1.0

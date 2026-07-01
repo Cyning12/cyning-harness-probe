@@ -1,6 +1,6 @@
 [project]
 name = "harness-probe"
-version = "0.9.4"
+version = "0.9.5"
 description = "Harness Probe · L0/L1/L1.5/L2 编译探针"
 readme = "README.md"
 license = {text = "MIT"}
@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.6,<3",
     "PyYAML>=6.0",
     "rich>=13.7",
+    "watchdog>=4.0",
 ]
 
 [project.optional-dependencies]
@@ -35,5 +36,5 @@ markers = [
 python_version = "3.11"
 warn_unused_ignores = true
 [[tool.mypy.overrides]]
-module = ["yaml"]
+module = ["yaml", "watchdog.events", "watchdog.observers"]
 ignore_missing_imports = true
