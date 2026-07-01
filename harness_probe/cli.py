@@ -26,6 +26,7 @@ from harness_sdk.executor import (
     DryRunExecutor,
     PreviewExecutor,
     SubprocessExecutor,
+    VerifyExecutor,
     load_executor_plugin,
 )
 from harness_sdk.graph import query_subgraph
@@ -197,6 +198,20 @@ def _resolve_executor_plugin_name(args: argparse.Namespace) -> str:
     return "subprocess"
 
 
+def _resolve_sandbox_overrides(args: argparse.Namespace) -> dict[str, object]:
+    """解析 CLI 传入的沙箱参数覆盖。"""
+    overrides: dict[str, object] = {}
+    if args.sandbox_image:
+        overrides["image"] = args.sandbox_image
+    if args.sandbox_timeout:
+        overrides["timeout"] = args.sandbox_timeout
+    if args.sandbox_no_network:
+        overrides["network"] = False
+    if args.sandbox_memory:
+        overrides["memory"] = args.sandbox_memory
+    return overrides
+
+
 def _build_executor(
     plugin_name: str,
     *,
@@ -204,7 +219,8 @@ def _build_executor(
     safety_mode: str,
     execution_log_dir: str | None,
     dry_run: bool,
-) -> SubprocessExecutor | DryRunExecutor | PreviewExecutor:
+    sandbox_overrides: dict[str, object] | None = None,
+) -> VerifyExecutor:
     """根据插件名称构造配置好的执行器实例。"""
     if plugin_name == "subprocess":
         return SubprocessExecutor(
@@ -220,7 +236,7 @@ def _build_executor(
             safety_mode=safety_mode,
             safety_config=safety_config,
         )
-    return load_executor_plugin(plugin_name)
+    return load_executor_plugin(plugin_name, **(sandbox_overrides or {}))
 
 
 def _preview_report_to_dict(report, ref: str) -> dict:
@@ -315,12 +331,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     plugin_name = _resolve_executor_plugin_name(args)
     if plugin_name != "none":
         safety_config, safety_mode, execution_log_dir = _resolve_safety_params(args)
+        sandbox_overrides = _resolve_sandbox_overrides(args)
         executor = _build_executor(
             plugin_name,
             safety_config=safety_config,
             safety_mode=safety_mode,
             execution_log_dir=execution_log_dir,
             dry_run=args.dry_run,
+            sandbox_overrides=sandbox_overrides,
         )
 
     cwd = None
@@ -431,8 +449,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--executor-plugin",
         default=None,
-        choices=["dry-run", "preview", "subprocess"],
-        help="插件化执行器：dry-run / preview / subprocess",
+        choices=["dry-run", "preview", "subprocess", "docker", "firejail"],
+        help="插件化执行器：dry-run / preview / subprocess / docker / firejail",
+    )
+    p_run.add_argument(
+        "--sandbox-image",
+        default=None,
+        help="沙箱镜像，仅对 docker/firejail 生效",
+    )
+    p_run.add_argument(
+        "--sandbox-timeout",
+        type=float,
+        default=None,
+        help="沙箱命令超时秒数，默认读取 config/executor.yaml",
+    )
+    p_run.add_argument(
+        "--sandbox-no-network",
+        action="store_true",
+        help="禁用沙箱网络，仅对 docker/firejail 生效",
+    )
+    p_run.add_argument(
+        "--sandbox-memory",
+        default=None,
+        help="沙箱内存限制，如 512m / 1g",
     )
     p_run.add_argument(
         "--max-retries",

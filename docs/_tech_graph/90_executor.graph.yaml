@@ -1,6 +1,6 @@
 graph_id: "90_executor"
-title: "执行器插件化"
-description: "VerifyExecutor 协议 + dry-run / preview / subprocess 插件 + 配置加载 + 安全校验"
+title: "执行器插件化 + 沙箱执行器"
+description: "VerifyExecutor 协议 + dry-run / preview / subprocess / docker / firejail 插件 + 沙箱配置 + 安全校验"
 version: "2026-07-01"
 direction: "TD"
 
@@ -19,6 +19,15 @@ nodes:
     kind: service
   - id: "PREVIEW_PLUGIN"
     label: "PreviewExecutor plugin"
+    kind: service
+  - id: "SANDBOX"
+    label: "SandboxExecutor abstract base"
+    kind: data
+  - id: "DOCKER_PLUGIN"
+    label: "DockerExecutor plugin"
+    kind: service
+  - id: "FIREJAIL_PLUGIN"
+    label: "FirejailExecutor plugin"
     kind: service
   - id: "LOADER"
     label: "load_executor_plugin"
@@ -42,7 +51,7 @@ nodes:
     label: "config/executor.yaml"
     kind: storage
   - id: "CLI_ARGS"
-    label: "--executor / --executor-plugin / --safety-*"
+    label: "--executor / --executor-plugin / --sandbox-* / --safety-*"
     kind: input
 
 edges:
@@ -66,6 +75,12 @@ edges:
     anchors:
       - path: "harness_sdk/executor_plugins/_loader.py"
         symbol: "_load_executor_config"
+  - from: "EXECUTOR_YAML"
+    to: "SANDBOX"
+    label: "sandbox defaults"
+    anchors:
+      - path: "harness_sdk/executor_plugins/sandbox.py"
+        symbol: "default_sandbox_config"
   - from: "LOADER"
     to: "SUBPROCESS_PLUGIN"
     label: "instantiate"
@@ -84,6 +99,18 @@ edges:
     anchors:
       - path: "harness_sdk/executor_plugins/preview.py"
         symbol: "PreviewExecutor"
+  - from: "LOADER"
+    to: "DOCKER_PLUGIN"
+    label: "instantiate"
+    anchors:
+      - path: "harness_sdk/executor_plugins/docker.py"
+        symbol: "DockerExecutor"
+  - from: "LOADER"
+    to: "FIREJAIL_PLUGIN"
+    label: "instantiate"
+    anchors:
+      - path: "harness_sdk/executor_plugins/firejail.py"
+        symbol: "FirejailExecutor"
   - from: "VERIFY_EXECUTOR"
     to: "SUBPROCESS_PLUGIN"
     label: "implements"
@@ -93,6 +120,15 @@ edges:
   - from: "VERIFY_EXECUTOR"
     to: "PREVIEW_PLUGIN"
     label: "implements"
+  - from: "VERIFY_EXECUTOR"
+    to: "SANDBOX"
+    label: "implements"
+  - from: "SANDBOX"
+    to: "DOCKER_PLUGIN"
+    label: "subclass"
+  - from: "SANDBOX"
+    to: "FIREJAIL_PLUGIN"
+    label: "subclass"
   - from: "SUBPROCESS_PLUGIN"
     to: "SAFETY"
     label: "check(cmd) / preview(cmd)"
@@ -107,6 +143,12 @@ edges:
     anchors:
       - path: "harness_sdk/executor_plugins/preview.py"
         symbol: "preview"
+  - from: "DOCKER_PLUGIN"
+    to: "MODELS"
+    label: "return ExecutionResult"
+  - from: "FIREJAIL_PLUGIN"
+    to: "MODELS"
+    label: "return ExecutionResult"
   - from: "SAFETY_YAML"
     to: "SAFETY_CONFIG"
     label: "load_safety_config"

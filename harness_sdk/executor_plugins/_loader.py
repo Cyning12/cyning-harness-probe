@@ -6,7 +6,7 @@ import importlib
 import os
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -21,6 +21,8 @@ _BUILTIN_PLUGINS: dict[str, str] = {
     "dry-run": "harness_sdk.executor_plugins.dry_run:DryRunExecutor",
     "preview": "harness_sdk.executor_plugins.preview:PreviewExecutor",
     "subprocess": "harness_sdk.executor_plugins.subprocess:SubprocessExecutor",
+    "docker": "harness_sdk.executor_plugins.docker:DockerExecutor",
+    "firejail": "harness_sdk.executor_plugins.firejail:FirejailExecutor",
 }
 
 
@@ -65,6 +67,7 @@ def load_executor_plugin(
     name: str | None = None,
     *,
     config_path: str | Path | None = None,
+    **plugin_kwargs: Any,
 ) -> VerifyExecutor:
     """按名称加载执行器插件。
 
@@ -74,6 +77,7 @@ def load_executor_plugin(
       3. 环境变量 HARNESS_EXECUTOR_PLUGIN
       4. 默认 subprocess
 
+    ``**plugin_kwargs`` 会透传给插件构造函数，用于 CLI 覆盖沙箱默认参数。
     配置文件不存在时自动使用内置插件表；配置文件损坏时回退到
     默认 subprocess 并发出警告。
     """
@@ -108,8 +112,8 @@ def load_executor_plugin(
     try:
         cls = _resolve_plugin_class(spec)
     except ExecutorPluginError as exc:
-        # 配置指向的插件无法加载时回退默认 subprocess（仅当 name 来自配置时）
-        if name is None and cfg.get("default_plugin"):
+        # 配置指向的插件无法加载时回退默认 subprocess（仅当 name 来自配置且无额外构造参数时）
+        if name is None and cfg.get("default_plugin") and not plugin_kwargs:
             warnings.warn(
                 f"{exc}; falling back to default subprocess",
                 stacklevel=2,
@@ -118,4 +122,4 @@ def load_executor_plugin(
         else:
             raise
 
-    return cls()
+    return cls(**plugin_kwargs)

@@ -17,8 +17,8 @@
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
 | HG-TASK-DRAFT | `approved` | 30 | 任务单已定稿 |
-| HG-AUDIT-R1 | `approved` | 30 | R1 审计通过：v0.8.2 依赖 v0.8.1 插件体系，范围清晰 |
-| HG-EXEC-AUTH | `approved` | 30 | 已授权 30 改码，可派工 Claude Code |
+| HG-AUDIT-R1 | `approved` | 30 | R1 审计通过 |
+| HG-EXEC-AUTH | `approved` | 30 | 已执行并合并到 main |
 
 ## 背景与目标
 
@@ -84,21 +84,26 @@ v0.8.1 已完成执行器插件化。v0.8.2 目标是在插件体系基础上引
 
 ## 验收标准
 
-- [ ] `DockerExecutor` 能执行简单命令并返回结果
-- [ ] `FirejailExecutor` 在 Linux 上可用
-- [ ] macOS 无 firejail 时有明确降级提示
-- [ ] CLI `--executor-plugin docker` 可切换
-- [ ] 沙箱参数正确透传给执行器
-- [ ] 沙箱测试标记为可选/慢测试，不破坏默认套件
-- [ ] `pytest tests/ -q` 全绿（默认不跑沙箱测试）
-- [ ] `ruff check .` 全绿
-- [ ] `mypy harness_sdk` 全绿
-- [ ] 图谱与 CHANGELOG 同步更新
-- [ ] 创建并推送 `task/v0-8-2-sandbox-executor` 分支
+- [x] `DockerExecutor` 能执行简单命令并返回结果
+- [x] `FirejailExecutor` 在 Linux 上可用
+- [x] macOS 无 firejail 时有明确降级提示
+- [x] CLI `--executor-plugin docker` 可切换
+- [x] 沙箱参数正确透传给执行器
+- [x] 沙箱测试标记为可选/慢测试，不破坏默认套件
+- [x] `pytest tests/ -q` 全绿（默认不跑沙箱测试）
+- [x] `ruff check .` 全绿
+- [x] `mypy harness_sdk` 全绿
+- [x] 图谱与 CHANGELOG 同步更新
+- [x] 创建并推送 `task/v0-8-2-sandbox-executor` 分支
 
 ## 实现备忘
 
-- 待执行后回填
+- 已实现并提交到分支 `task/v0-8-2-sandbox-executor`
+- 新增：`harness_sdk/executor_plugins/sandbox.py`、`docker.py`、`firejail.py`
+- 新增：`docs/examples/sandbox/README.md`、`tests/test_sandbox_executor.py`
+- 修改：`harness_sdk/executor_plugins/__init__.py`、`_loader.py`、`config/executor.yaml`、`harness_probe/cli.py`、图谱、CHANGELOG、pyproject.toml
+- 验证：pytest 91 passed, 4 skipped, ruff passed, mypy passed
+- 状态：待合并到 main，关闭并归档到 `docs/harness/tasks/done/`
 
 ## 测试策略
 

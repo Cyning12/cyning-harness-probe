@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.8.2 · 2026-07-01
+
+### Added
+
+- **沙箱执行器原型（8.4）**：在执行器插件化基础上新增 `SandboxExecutor` 抽象基类。
+  - 通用沙箱参数：`image`、`timeout`、`network`、`memory`、`cpu`。
+  - `SandboxConfigError`：参数非法或环境不满足时给出明确错误。
+- **`DockerExecutor`**：`harness_sdk/executor_plugins/docker.py`，基于 `docker run` 在临时容器内执行命令。
+  - 默认禁用容器网络，限制内存与 CPU。
+  - 超时后回收容器并返回 `ExecutionResult.timed_out=True`。
+  - Docker 未安装时提示安装。
+- **`FirejailExecutor`**：`harness_sdk/executor_plugins/firejail.py`（Linux only）。
+  - 使用 `firejail --noprofile --net=none` 做进程级沙箱。
+  - macOS 上给出明确错误，建议改用 Docker。
+- **插件加载**：`_loader.py` 注册 `docker` / `firejail` 内置插件；支持 `config/executor.yaml` 中 `sandbox` 默认配置。
+- **CLI 沙箱参数**：`harness_probe/cli.py` 新增 `--sandbox-image`、`--sandbox-timeout`、`--sandbox-no-network`、`--sandbox-memory`，透传给沙箱执行器。
+- **沙箱测试**：`tests/test_sandbox_executor.py` 覆盖 Docker 运行、参数解析、环境缺失错误。
+  - 默认跳过 Docker 测试；启用需设置 `HARNESS_TEST_DOCKER=1`。
+- **使用示例**：新增 `docs/examples/sandbox/README.md`。
+
+### Changed
+
+- `config/executor.yaml` 增加 `docker` / `firejail` 插件映射与 `sandbox` 默认配置段。
+- `docs/_tech_graph/90_executor.graph.yaml` 更新以反映沙箱执行器节点与依赖。
+
 ## v0.8.1 · 2026-07-01
 
 ### Added

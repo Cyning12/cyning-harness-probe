@@ -1,7 +1,7 @@
 {
   "schema_version": "graph_v2",
   "freeze_id": "HARNESS-PROBE-GRAPH-V2",
-  "generated_at": "2026-07-01T01:18:46.529688+00:00",
+  "generated_at": "2026-07-01T01:46:27.799766+00:00",
   "nodes": [
     {
       "id": "CLI",
@@ -298,6 +298,27 @@
       "graph_id": "probe"
     },
     {
+      "id": "SANDBOX",
+      "label": "SandboxExecutor abstract base",
+      "kind": "data",
+      "module_id": "SANDBOX",
+      "graph_id": "probe"
+    },
+    {
+      "id": "DOCKER_PLUGIN",
+      "label": "DockerExecutor plugin",
+      "kind": "service",
+      "module_id": "DOCKER_PLUGIN",
+      "graph_id": "probe"
+    },
+    {
+      "id": "FIREJAIL_PLUGIN",
+      "label": "FirejailExecutor plugin",
+      "kind": "service",
+      "module_id": "FIREJAIL_PLUGIN",
+      "graph_id": "probe"
+    },
+    {
       "id": "LOADER",
       "label": "load_executor_plugin",
       "kind": "service",
@@ -334,7 +355,7 @@
     },
     {
       "id": "CLI_ARGS",
-      "label": "--executor / --executor-plugin / --safety-*",
+      "label": "--executor / --executor-plugin / --sandbox-* / --safety-*",
       "kind": "input",
       "module_id": "CLI_ARGS",
       "graph_id": "probe"
@@ -901,6 +922,20 @@
       ]
     },
     {
+      "from": "EXECUTOR_YAML",
+      "to": "SANDBOX",
+      "mark": "sandbox defaults",
+      "type": "depends_on",
+      "label": "sandbox defaults",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/sandbox.py",
+          "symbol": "default_sandbox_config"
+        }
+      ]
+    },
+    {
       "from": "LOADER",
       "to": "SUBPROCESS_PLUGIN",
       "mark": "instantiate",
@@ -943,6 +978,34 @@
       ]
     },
     {
+      "from": "LOADER",
+      "to": "DOCKER_PLUGIN",
+      "mark": "instantiate",
+      "type": "depends_on",
+      "label": "instantiate",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/docker.py",
+          "symbol": "DockerExecutor"
+        }
+      ]
+    },
+    {
+      "from": "LOADER",
+      "to": "FIREJAIL_PLUGIN",
+      "mark": "instantiate",
+      "type": "depends_on",
+      "label": "instantiate",
+      "graph_id": "probe",
+      "anchors": [
+        {
+          "path": "harness_sdk/executor_plugins/firejail.py",
+          "symbol": "FirejailExecutor"
+        }
+      ]
+    },
+    {
       "from": "VERIFY_EXECUTOR",
       "to": "SUBPROCESS_PLUGIN",
       "mark": "implements",
@@ -966,6 +1029,33 @@
       "mark": "implements",
       "type": "depends_on",
       "label": "implements",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "VERIFY_EXECUTOR",
+      "to": "SANDBOX",
+      "mark": "implements",
+      "type": "depends_on",
+      "label": "implements",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "SANDBOX",
+      "to": "DOCKER_PLUGIN",
+      "mark": "subclass",
+      "type": "depends_on",
+      "label": "subclass",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "SANDBOX",
+      "to": "FIREJAIL_PLUGIN",
+      "mark": "subclass",
+      "type": "depends_on",
+      "label": "subclass",
       "graph_id": "probe",
       "anchors": []
     },
@@ -1000,6 +1090,24 @@
           "symbol": "preview"
         }
       ]
+    },
+    {
+      "from": "DOCKER_PLUGIN",
+      "to": "MODELS",
+      "mark": "return ExecutionResult",
+      "type": "depends_on",
+      "label": "return ExecutionResult",
+      "graph_id": "probe",
+      "anchors": []
+    },
+    {
+      "from": "FIREJAIL_PLUGIN",
+      "to": "MODELS",
+      "mark": "return ExecutionResult",
+      "type": "depends_on",
+      "label": "return ExecutionResult",
+      "graph_id": "probe",
+      "anchors": []
     },
     {
       "from": "SAFETY_YAML",

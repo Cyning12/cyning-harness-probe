@@ -1,6 +1,6 @@
 [project]
 name = "harness-probe"
-version = "0.8.1"
+version = "0.8.2"
 description = "Harness Probe · L0/L1/L1.5/L2 编译探针"
 readme = "README.md"
 license = {text = "MIT"}
@@ -26,6 +26,10 @@ build-backend = "hatchling.build"
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = [
+    "docker: requires a running Docker daemon",
+]
+
 
 [tool.mypy]
 python_version = "3.11"
