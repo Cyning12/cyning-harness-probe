@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 import warnings
 from enum import Enum
 from pathlib import Path
@@ -48,13 +49,21 @@ class HumanGate(BaseModel):
     def _normalize_status(cls, value: Any) -> Any:
         if isinstance(value, str):
             value = value.strip().strip("`")
-            if value == "completed":
+            # 兼容旧任务单中曾用的非标准状态，统一映射为 approved
+            legacy_map = {
+                "completed": HumanGateStatus.approved,
+                "approved_for_audit": HumanGateStatus.approved,
+                "draft": HumanGateStatus.approved,
+            }
+            if value in legacy_map:
                 warnings.warn(
-                    "human_gate status 'completed' is deprecated; use 'approved'",
+                    f"human_gate status '{value}' is deprecated; use 'approved'",
                     DeprecationWarning,
                     stacklevel=2,
                 )
-                return HumanGateStatus.approved
+                return legacy_map[value]
+            # 允许旧任务单中带反引号的 approved/pending/completed
+            value = value.strip("`")
         return value
 
     @field_validator("blocks_hats", mode="before")
@@ -66,8 +75,12 @@ class HumanGate(BaseModel):
             for part in parts:
                 if not part:
                     continue
+                # 兼容旧任务单中的非纯数字文本，如 "20-task-audit R1, 30"
+                m = re.search(r"(\d+)", part)
+                if not m:
+                    continue
                 try:
-                    out.append(int(part))
+                    out.append(int(m.group(1)))
                 except ValueError as exc:
                     raise ValueError(
                         f"blocks_hats must be a list of integers; got {value!r}"
@@ -143,7 +156,12 @@ class TaskSchema(BaseModel):
     @model_validator(mode="after")
     def _validate_graph_delta(self) -> TaskSchema:
         delta = self.metadata.graph_delta
-        if not delta or delta.strip().lower() == "none":
+        if not delta:
+            return self
+        # 支持 "none" 或带说明括号的写法，如 "none (本任务..."
+        first_token = delta.strip().split()[0].lower().strip("()`")
+        normalized = first_token.split("（")[0].split("(")[0]
+        if normalized in {"none", "n/a", ""}:
             return self
         root = _repo_root()
         target = root / delta

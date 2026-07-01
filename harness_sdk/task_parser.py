@@ -90,7 +90,12 @@ def _table_rows(section_text: str) -> list[list[str]]:
 
 
 def _strip_inline_code(value: str) -> str:
-    return value.strip().strip("`").strip()
+    """去除 Markdown 单元格中的粗体、反引号和空白。
+
+    旧任务单中 status 可能写成 ``**`approved`**`` 或 ```**approved`**``，
+    需要把 ``**`` 和 `` ` `` 全部去掉，只留原始文本。
+    """
+    return value.strip().replace("**", "").replace("`", "").strip()
 
 
 def _header_indices(header: list[str], *keywords: str) -> dict[str, int]:
@@ -287,10 +292,11 @@ def parse_task_text(
 
     # 4. freeze_id 一致性警告（非错误）
     filename = path.name if path else ""
-    freeze_warning = _freeze_id_warning(filename, info.freeze_id)
-    if freeze_warning:
-        parsed_warnings.append(freeze_warning)
-        warnings.warn(freeze_warning, UserWarning, stacklevel=2)
+    if info.freeze_id and filename:
+        freeze_warning = _freeze_id_warning(filename, info.freeze_id)
+        if freeze_warning:
+            parsed_warnings.append(freeze_warning)
+            warnings.warn(freeze_warning, UserWarning, stacklevel=2)
 
     # 5. graph_delta 存在性校验通过 TaskSchema 模型触发
     schema = TaskSchema(metadata=info, content=sections)

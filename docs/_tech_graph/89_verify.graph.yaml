@@ -1,0 +1,65 @@
+id: harness-verify
+name: Harness Verify 可执行验收
+module: VERIFY
+description: >
+  harness-probe verify 子命令本地可执行验收流程：解析任务单、校验人闸、
+  检查 graph_delta 存在性、运行 pytest/ruff/mypy，并返回结构化 VerifyReport。
+
+nodes:
+  - id: VERIFY
+    name: Verify Core
+    type: core
+    freeze_id: v0.10.0
+    docs:
+      - harness_probe/verify.py
+      - docs/harness/tasks/active/task_harness_probe_v0_10_0_p0_2_verify_v1.md
+
+  - id: VERIFY-CLI
+    name: verify CLI
+    type: cli
+    freeze_id: v0.10.0
+    docs:
+      - harness_probe/cli.py
+
+  - id: VERIFY-REPORT
+    name: VerifyReport
+    type: model
+    freeze_id: v0.10.0
+    docs:
+      - harness_probe/verify.py
+
+  - id: TASK-SCHEMA
+    name: Task Schema
+    type: dependency
+    freeze_id: v0.10.0
+    docs:
+      - harness_sdk/task_schema.py
+      - harness_sdk/task_parser.py
+
+  - id: CONFIG-MANAGER
+    name: Config Manager
+    type: dependency
+    freeze_id: v0.9.5
+    docs:
+      - harness_sdk/config.py
+
+edges:
+  - from: VERIFY-CLI
+    to: VERIFY
+    relation: invokes
+
+  - from: VERIFY
+    to: TASK-SCHEMA
+    relation: depends_on
+
+  - from: VERIFY
+    to: CONFIG-MANAGER
+    relation: depends_on
+
+  - from: VERIFY
+    to: VERIFY-REPORT
+    relation: produces
+
+  - from: VERIFY-CLI
+    to: VERIFY-REPORT
+    relation: outputs
