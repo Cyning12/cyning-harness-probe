@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 import uuid
@@ -107,6 +108,12 @@ def _load_config() -> dict:
     if not cfg_path.exists():
         return {}
     return yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+
+
+def _resolve_env(args: argparse.Namespace) -> str:
+    """解析 CLI --env / -e 与环境变量 HARNESS_ENV，默认 dev。"""
+    env = getattr(args, "env", None) or os.environ.get("HARNESS_ENV")
+    return env or "dev"
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -230,7 +237,10 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 def _resolve_safety_params(args: argparse.Namespace) -> tuple[SafetyConfig, str, str | None]:
     """解析 CLI 与统一配置中心的安全参数，返回 (config, mode, log_dir)。"""
-    cfg = ConfigManager.default(project_root=str(_repo_root()))
+    cfg = ConfigManager.default(
+        project_root=str(_repo_root()),
+        env=_resolve_env(args),
+    )
 
     safety_mode = getattr(args, "safety_mode", None) or cfg.get("harness.safety.mode", "whitelist")
     execution_log_dir = getattr(args, "execution_log_dir", None)
@@ -264,7 +274,10 @@ def _resolve_executor_plugin_name(args: argparse.Namespace) -> str:
 
     优先级：--executor-plugin > --executor 兼容映射 > 配置中心 > 默认。
     """
-    cfg = ConfigManager.default(project_root=str(_repo_root()))
+    cfg = ConfigManager.default(
+        project_root=str(_repo_root()),
+        env=_resolve_env(args),
+    )
     if args.executor_plugin:
         cfg.set("harness.executor.default_plugin", args.executor_plugin)
     else:
@@ -647,6 +660,7 @@ def cmd_config_validate(args: argparse.Namespace) -> int:
         cfg = ConfigManager.default(
             config_dir=args.config_dir,
             project_root=str(_repo_root()),
+            env=_resolve_env(args),
         )
     except ConfigError as exc:
         print(f"config_error: {exc}", file=sys.stderr)
@@ -668,6 +682,7 @@ def cmd_config_show(args: argparse.Namespace) -> int:
         cfg = ConfigManager.default(
             config_dir=args.config_dir,
             project_root=str(_repo_root()),
+            env=_resolve_env(args),
         )
     except ConfigError as exc:
         print(f"config_error: {exc}", file=sys.stderr)
@@ -680,6 +695,36 @@ def cmd_config_show(args: argparse.Namespace) -> int:
         print(yaml.safe_dump(cfg.to_dict(), sort_keys=False, allow_unicode=True))
     else:  # markdown
         print(_render_config_markdown(cfg))
+    return 0
+
+
+def cmd_config_watch(args: argparse.Namespace) -> int:
+    """启动配置热重载监听。"""
+    try:
+        cfg = ConfigManager.default(
+            config_dir=args.config_dir,
+            project_root=str(_repo_root()),
+            env=_resolve_env(args),
+        )
+    except ConfigError as exc:
+        print(f"config_error: {exc}", file=sys.stderr)
+        return 2
+
+    def _on_reload(manager: ConfigManager) -> None:
+        print("[reload] configuration reloaded")
+        if args.verbose:
+            print(yaml.safe_dump(manager.to_dict(), sort_keys=False, allow_unicode=True))
+
+    cfg.register_on_reload(_on_reload)
+    cfg.watch()
+    print(f"watching config dir: {cfg._config_dir}")
+    print("press Ctrl+C to stop")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        cfg.stop_watch()
+        print("\nwatch stopped")
     return 0
 
 
@@ -704,6 +749,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_compile.add_argument("--query", default=None)
     p_compile.add_argument("--quiet", action="store_true")
     p_compile.add_argument("--no-audit", action="store_true", help="禁用审计日志")
+    p_compile.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
     p_compile.add_argument(
         "--capability",
         action="append",
@@ -813,6 +864,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["json", "markdown"],
         help="沙箱预览报告格式：json（默认）/ markdown",
     )
+    p_run.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_watch = sub.add_parser("watch", help="监视 freeze_id 漂移")
@@ -869,6 +926,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="配置目录，默认使用 <repo>/config",
     )
+    p_config_validate.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
     p_config_validate.set_defaults(func=cmd_config_validate)
 
     p_config_show = config_sub.add_parser("show", help="显示合并后的配置")
@@ -878,12 +941,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="配置目录，默认使用 <repo>/config",
     )
     p_config_show.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
+    p_config_show.add_argument(
         "--format",
         default="json",
         choices=["json", "yaml", "markdown"],
         help="输出格式：json（默认）/ yaml / markdown",
     )
     p_config_show.set_defaults(func=cmd_config_show)
+
+    p_config_watch = config_sub.add_parser("watch", help="启动配置热重载监听")
+    p_config_watch.add_argument(
+        "--config-dir",
+        default=None,
+        help="配置目录，默认使用 <repo>/config",
+    )
+    p_config_watch.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
+    p_config_watch.add_argument(
+        "--verbose",
+        action="store_true",
+        help="重载后打印完整配置",
+    )
+    p_config_watch.set_defaults(func=cmd_config_watch)
 
     p_safety = sub.add_parser("safety", help="安全策略与能力模型")
     safety_sub = p_safety.add_subparsers(dest="safety_command", required=True)
@@ -911,6 +999,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["json", "markdown"],
         help="输出格式：markdown（默认）/ json",
     )
+    p_safety_show.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
     p_safety_show.set_defaults(func=cmd_safety_show)
 
     p_safety_evaluate = safety_sub.add_parser("evaluate", help="评估命令风险等级")
@@ -934,6 +1028,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="显式声明额外能力（可多次指定）",
+    )
+    p_safety_evaluate.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
     )
     p_safety_evaluate.set_defaults(func=cmd_safety_evaluate)
 
