@@ -17,8 +17,8 @@
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
 | HG-TASK-DRAFT | `completed` | 30 | 任务已完成 |
-| HG-AUDIT-R1 | `completed` | 30 | R1 已审计 |
-| HG-EXEC-AUTH | `completed` | 30 | 已执行完成，测试绿 |
+| HG-AUDIT-R1 | `approved` | 30 | R1 已审计 |
+| HG-EXEC-AUTH | `approved` | 30 | 已执行完成，测试绿，合并到 main |
 
 ## 背景与目标
 
