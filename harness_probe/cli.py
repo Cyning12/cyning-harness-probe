@@ -25,6 +25,14 @@ from harness_probe.io import (
     persist_run_graph,
     validate_task_markdown,
 )
+from harness_probe.verify import (
+    VerifyReport,
+    aggregate_reports_to_json,
+    aggregate_reports_to_markdown,
+    report_to_json,
+    report_to_markdown,
+    verify_task,
+)
 from harness_sdk import ConfigError, ConfigManager, TaskRunner
 from harness_sdk.task_parser import parse_task_file
 from harness_sdk.audit import AuditLogger, AuditReader, AuditReport
@@ -120,7 +128,15 @@ def _resolve_env(args: argparse.Namespace) -> str:
     return env or "dev"
 
 
-def cmd_verify(args: argparse.Namespace) -> int:
+def _task_display_path(task_path: Path) -> Path | str:
+    """任务单展示路径：仓库内相对路径，否则绝对路径。"""
+    try:
+        return task_path.relative_to(_repo_root())
+    except ValueError:
+        return task_path
+
+
+def cmd_pre_spawn_verify(args: argparse.Namespace) -> int:
     """PRE_SPAWN_VERIFY：校验 task 人闸与 Harness 规则，不生成 Prompt。"""
     run_id = uuid.uuid4().hex
     task_path = Path(args.task)
@@ -132,9 +148,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
             _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "fail")
         return 2
 
+    display = _task_display_path(task_path)
     errors = validate_task_markdown(task_path)
     if errors:
-        print(f"=== {task_path.relative_to(_repo_root())} ===")
+        print(f"=== {display} ===")
         for err in errors:
             print(f"[ERROR] {err}")
         print("BLOCKED")
@@ -144,18 +161,92 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     task = parse_task_markdown(task_path)
     if task.blocks_hat("30") and not task.is_gate_approved("HG-AUDIT-R1"):
-        print(f"=== {task_path.relative_to(_repo_root())} ===")
+        print(f"=== {display} ===")
         print("[ERROR] HG-AUDIT-R1 pending but blocks 30 · 禁止派工 30")
         print("BLOCKED")
         if _audit_enabled(args):
             _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "fail")
         return 1
 
-    print(f"=== {task_path.relative_to(_repo_root())} ===")
+    print(f"=== {display} ===")
     print("OK · PRE_SPAWN_VERIFY pass")
     if _audit_enabled(args):
         _log_verify_event(run_id, str(task_path), "PRE_SPAWN_VERIFY", "pass")
     return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """对任务单执行完整本地验证流程（P0-2 Verify）。"""
+    run_id = uuid.uuid4().hex
+    if args.task and args.dir:
+        print("specify either --task or --dir, not both", file=sys.stderr)
+        return 2
+    if not args.task and not args.dir and not args.pre_spawn:
+        print("specify --task <path>, --dir <path>, or --pre-spawn", file=sys.stderr)
+        return 2
+
+    if args.pre_spawn:
+        return cmd_pre_spawn_verify(args)
+
+    reports: list[VerifyReport] = []
+    # CLI 默认运行完整外部检查；CI 场景同样真实执行，不跳过。
+    run_external = True
+    if args.task:
+        p = Path(args.task)
+        if not p.is_absolute():
+            p = _repo_root() / p
+        if not p.is_file():
+            print(f"task file not found: {p}", file=sys.stderr)
+            return 2
+        reports.append(verify_task(p, strict=args.strict, env=args.env, run_external_checks=run_external))
+    else:
+        d = Path(args.dir)
+        if not d.is_absolute():
+            d = _repo_root() / d
+        if not d.is_dir():
+            print(f"dir not found: {d}", file=sys.stderr)
+            return 2
+        paths = sorted(d.glob("task_*.md"))
+        if not paths:
+            print(f"no task_*.md files found in {d}", file=sys.stderr)
+            return 2
+        for p in paths:
+            reports.append(verify_task(p, strict=args.strict, env=args.env, run_external_checks=run_external))
+
+    if args.ci:
+        failed = [r for r in reports if not r.passed]
+        for r in failed:
+            rel = r.task_path
+            try:
+                rel = str(Path(r.task_path).relative_to(_repo_root()))
+            except ValueError:
+                pass
+            print(f"FAIL · {rel}")
+            for blocker in r.blockers:
+                print(f"  - {blocker}")
+        summary = f"{sum(1 for r in reports if r.passed)}/{len(reports)} tasks passed"
+        print(summary)
+        if _audit_enabled(args):
+            status = "pass" if not failed else "fail"
+            _log_verify_event(run_id, str(args.task or args.dir or "."), "P0-2-verify", status)
+        return 1 if failed else 0
+
+    if args.format == "json":
+        if len(reports) == 1:
+            print(report_to_json(reports[0]))
+        else:
+            print(aggregate_reports_to_json(reports))
+    else:
+        if len(reports) == 1:
+            print(report_to_markdown(reports[0]))
+        else:
+            print(aggregate_reports_to_markdown(reports))
+
+    if _audit_enabled(args):
+        status = "pass" if all(r.passed for r in reports) else "fail"
+        _log_verify_event(run_id, str(args.task or args.dir or "."), "P0-2-verify", status)
+
+    return 0 if all(r.passed for r in reports) else 1
 
 
 def _resolve_path(arg: str | None, cfg_key: str) -> Path:
@@ -876,8 +967,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Harness Probe · L0/L1/L1.5/L2 探针")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_verify = sub.add_parser("verify", help="PRE_SPAWN_VERIFY · 校验 task 人闸与规则")
-    p_verify.add_argument("--task", default="data/tasks/sample_task.md")
+    p_verify = sub.add_parser("verify", help="本地可执行验收（P0-2 Verify）")
+    p_verify.add_argument(
+        "--task",
+        default=None,
+        help="任务单 Markdown 文件路径",
+    )
+    p_verify.add_argument(
+        "--dir",
+        default=None,
+        help="批量扫描目录下的 task_*.md",
+    )
+    p_verify.add_argument(
+        "--format",
+        default="markdown",
+        choices=["json", "markdown"],
+        help="输出格式：markdown（默认）/ json",
+    )
+    p_verify.add_argument(
+        "--ci",
+        action="store_true",
+        help="失败时非 0 退出码，仅输出失败项与汇总",
+    )
+    p_verify.add_argument(
+        "--strict",
+        action="store_true",
+        help="将 completed 人闸状态视为非法",
+    )
+    p_verify.add_argument(
+        "--env",
+        "-e",
+        default=None,
+        help="目标环境（如 dev/test/prod），默认 dev",
+    )
+    p_verify.add_argument(
+        "--pre-spawn",
+        action="store_true",
+        help="使用旧版 PRE_SPAWN_VERIFY 仅校验人闸",
+    )
     p_verify.add_argument("--no-audit", action="store_true", help="禁用审计日志")
     p_verify.set_defaults(func=cmd_verify)
 

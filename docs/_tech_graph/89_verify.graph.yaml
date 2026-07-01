@@ -43,6 +43,13 @@ nodes:
     docs:
       - harness_sdk/config.py
 
+  - id: TEST-SUITE
+    name: tests/test_verify.py
+    type: test
+    freeze_id: v0.10.0
+    docs:
+      - tests/test_verify.py
+
 edges:
   - from: VERIFY-CLI
     to: VERIFY
@@ -63,3 +70,7 @@ edges:
   - from: VERIFY-CLI
     to: VERIFY-REPORT
     relation: outputs
+
+  - from: TEST-SUITE
+    to: VERIFY
+    relation: validates

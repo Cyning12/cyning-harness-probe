@@ -17,6 +17,12 @@
 
 - `pyproject.toml` 版本更新至 `0.10.0`。
 
+- **P0-2 本地可执行验收**：
+  - 新增 `harness_probe/verify.py`：定义 `VerifyCheck` / `VerifyReport` 模型，实现 `verify_task`（解析任务单、人闸、graph_delta、test_strategy、pytest/ruff/mypy 外部检查）。
+  - 扩展 `harness_probe/cli.py`：`harness-probe verify` 支持 `--task` / `--dir` / `--format json|markdown` / `--ci` / `--strict` / `--env`；旧版 `PRE_SPAWN_VERIFY` 保留为 `--pre-spawn`。
+  - 新增 `tests/test_verify.py`：覆盖通过/失败路径、JSON/Markdown 输出、CI 非零退出、批量目录、外部检查注入与 `--pre-spawn` 回退。
+  - 更新 `docs/_tech_graph/89_verify.graph.yaml`。
+
 ## v0.9.5 · 2026-07-01
 
 ### Added

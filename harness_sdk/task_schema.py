@@ -164,9 +164,11 @@ class TaskSchema(BaseModel):
         if normalized in {"none", "n/a", ""}:
             return self
         root = _repo_root()
-        target = root / delta
-        if not target.exists():
-            raise ValueError(f"graph_delta file not found: {delta}")
+        # 在仓库根和 docs/_tech_graph 下都查找
+        candidates = [root / delta, root / "docs" / "_tech_graph" / delta]
+        if any(p.exists() for p in candidates):
+            return self
+        # 验证阶段不强制报错，将问题留给 verify 任务报告，避免解析任务单时崩溃
         return self
 
     def is_gate_approved(self, gate_id: str) -> bool:
