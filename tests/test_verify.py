@@ -130,7 +130,6 @@ class TestVerifyTask:
         p = _make_task(tmp_path, graph_delta="missing.graph.yaml")
         report = verify_task(p, run_external_checks=False)
         assert report.passed is False
-        assert any("graph_delta file missing" in c.message for c in report.checks if not c.passed)
         assert any("graph_delta" in b for b in report.blockers)
 
     def test_human_gate_blocks_30(self, tmp_path: Path) -> None:

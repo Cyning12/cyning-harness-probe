@@ -400,12 +400,19 @@ def verify_task(
     try:
         schema, _warnings = parse_task_file(task_path_resolved)
     except Exception as exc:  # noqa: BLE001 — 解析失败统一返回失败报告
+        blockers = [f"parse_error: {exc}"]
+        # 尝试提供更具体的 graph_delta 缺失信息
+        if "graph_delta file not found" in str(exc):
+            # Pydantic ValidationError 的 str 通常包含多行错误信息；提取 msg 中的核心文本
+            import re
+            m = re.search(r"Value error,\s*(graph_delta file not found: [^\]]+)", str(exc))
+            blockers = [m.group(1).strip() if m else str(exc)]
         return VerifyReport(
             task_path=str(task_path),
             passed=False,
-            blockers=[f"parse_error: {exc}"],
+            blockers=blockers,
             checks=[],
-            summary=f"parse_error: {exc}",
+            summary=blockers[0],
         )
 
     raw_statuses = _extract_raw_gate_statuses(task_path_resolved)

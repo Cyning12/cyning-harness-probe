@@ -13,15 +13,16 @@
   - 新增 `docs/_tech_graph/92_task_schema.graph.yaml`，描述任务单解析到 `verify` 与 Ops Desk 的依赖关系。
   - 新增测试 `tests/test_task_schema.py`、`tests/test_task_parser.py`、`tests/test_cli_task_validate.py`，覆盖模型校验、Markdown 解析、CLI 返回码与批量目录扫描。
 
-### Changed
-
-- `pyproject.toml` 版本更新至 `0.10.0`。
-
 - **P0-2 本地可执行验收**：
   - 新增 `harness_probe/verify.py`：定义 `VerifyCheck` / `VerifyReport` 模型，实现 `verify_task`（解析任务单、人闸、graph_delta、test_strategy、pytest/ruff/mypy 外部检查）。
   - 扩展 `harness_probe/cli.py`：`harness-probe verify` 支持 `--task` / `--dir` / `--format json|markdown` / `--ci` / `--strict` / `--env`；旧版 `PRE_SPAWN_VERIFY` 保留为 `--pre-spawn`。
   - 新增 `tests/test_verify.py`：覆盖通过/失败路径、JSON/Markdown 输出、CI 非零退出、批量目录、外部检查注入与 `--pre-spawn` 回退。
   - 更新 `docs/_tech_graph/89_verify.graph.yaml`。
+
+### Changed
+
+- `pyproject.toml` 版本更新至 `0.10.0`。
+- `harness_sdk/task_schema.py` 的 `graph_delta` 存在性校验恢复为严格模式：缺失时抛出 `ValidationError`，统一在 `task validate` 与 `verify` 中报告明确 blocker。
 
 ## v0.9.5 · 2026-07-01
 
@@ -163,7 +164,7 @@
 ### Fixed
 
 - 未知插件名抛出 `ExecutorPluginError`，CLI 统一退出码 2。
-- 插件配置损坏时回退到默认 `subprocess` 并发出警告。
+- 插件配置损坏时回退到 `subprocess` 并发出警告。
 
 ## v0.8.0 · 2026-06-30
 
@@ -178,7 +179,7 @@
   - `harness_mcp/tools.py` 的 `probe_run` 新增 `preview` / `preview_format` 参数。
 - **显式 AcceptanceContract verify**：`harness_sdk/compiler.py` 在 task 含显式 `## AcceptanceContract` 表时，按 `ref` 覆盖 failure_paths 自动推断的 verify 命令，使预览可反映任务作者指定的真实命令。
 
-## v0.7.1 · 2026-06-30
+## v0.7.1 · 2026-07-01
 
 ### Added
 
@@ -189,7 +190,7 @@
 - **CLI 安全参数**：`harness_probe/cli.py` 新增 `--safety-config`。
 - **MCP 安全参数**：`harness_mcp/tools.py` 的 `probe_run` 新增 `safety_config` / `safety_mode`。
 - **事件循环兼容**：`TaskRunner._run_executor` 在已有事件循环环境中通过后台线程运行 executor。
-- **Wiki 加载容错**：`load_wiki_stub` 在文件缺失时返回空列表。
+- **Wiki 加载容错**：`load_wiki_stub` 文件缺失时返回空列表。
 
 ## v0.7 · 2026-06-30
 
@@ -216,7 +217,7 @@
 ### Added
 
 - **CLI 真实执行**：`run` 子命令新增 `--executor {mock,real}`、`--max-retries N`、`--cwd PATH`。
-  - 默认 `--executor mock`，行为与 v0.5 dry-run 一致。
+  - 默认 `--executor mock`， 行为与 v0.5 dry-run 一致。
   - `--executor real` 时创建 `SubprocessExecutor` 真实执行 `contract.verify`。
   - `--cwd` 指定真实执行的工作目录。
 - **Runner 重跑逻辑**：`TaskRunner.run_sequence` 支持 `max_retries`。
@@ -235,7 +236,7 @@
 
 ### Added
 
-- **MCP Server**：新增 `harness_mcp/` 模块，基于 FastMCP 暴露 4 个 Tool 与 1 个 Resource。
+- **MCP Server**：新增 `harness_mcp/` 模块，基于 FastMCP 暴露 4 个 Tool 与 1 个 Resource`。
   - Tool：`probe_compile` / `probe_run` / `probe_audit` / `probe_verify`
   - Resource：`harness://freeze_id/current`
 - **可选依赖**：`pip install -e ".[mcp]"` 安装 `mcp>=1.0.0`。
@@ -263,7 +264,7 @@
 
 - 旧 `src/` 目录（Phase 1 代码已迁移至 `harness_sdk/` + `harness_probe/`）。
 
-## v0.3 · 2026-06-29
+## v0.3 · 2026-06-30
 
 ### Added
 
@@ -286,14 +287,14 @@
 
 - `8b23630` `feat(phase1): full hat chain support · 10-spec/10-task/20-review/50-reinspect + --run + --watch`
 
-## v0.2 · 2026-06-29
+## v0.2 · 2026-06-30
 
 ### Added
 
 - **PRE_SPAWN_VERIFY 校验**：新增 `python -m src.probe verify --task <path>` 子命令。
   - 校验 task 是否含 `human_gate` 表。
   - 校验 `blocks_hats` 含 `30` 时是否显式含 `HG-AUDIT-R1`。
-  - 对齐工作区 IMP-09 / [`PROMPT_cursor_task_chain_serial_v1.md`](https://github.com/Cyning12/cyning-ink-workspace/blob/main/docs/harness/prompts/PROMPT_cursor_task_chain_serial_v1.md) §4.5。
+  - 对齐工作区 IMP-09 / [`PROMPT_cursor_task_chain_serial_v1.md`](https://github.com/Cyning12/cyning-ink-workspace/blob/main/docs/harness/patterns/PROMPT_cursor_task_chain_serial_v1.md) §4.5。
 
 ### Changed
 
@@ -309,7 +310,7 @@
 
 ---
 
-## v0.1 · 2026-06-28
+## v0.1 · 2026-06-30
 
 ### Added
 
