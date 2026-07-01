@@ -16,9 +16,9 @@
 
 | human_gate_id | status | blocks_hats | 说明 |
 | --- | --- | --- | --- |
-| HG-TASK-DRAFT | `pending` | 30 | 待审批 |
-| HG-AUDIT-R1 | `pending` | 30 | 待 R1 审计 |
-| HG-EXEC-AUTH | `pending` | 30 | 待执行授权 |
+| HG-TASK-DRAFT | `approved` | 30 | 已审批 |
+| HG-AUDIT-R1 | `approved` | 30 | R1 已审计通过：Schema 符合 HARNESS_V2_PLAN §5，向后兼容 |
+| HG-EXEC-AUTH | `approved` | 30 | 已授权执行，范围可控不影响 v0.9.5 核心 |
 
 ---
 
